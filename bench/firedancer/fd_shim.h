@@ -1,7 +1,8 @@
 /* Just enough of Firedancer's util layer to build fd_base64.c on its own.
 
    fd_base64.c below is vendored unchanged from Firedancer
-   (src/ballet/base64/fd_base64.c, Apache-2.0) so that the benchmark measures
+   (src/ballet/base64/fd_base64.c at 5c767e1d, 2023-10-27, Apache-2.0, the
+   licence beside it) so that the benchmark measures
    the code Firedancer actually runs, compiled by a C compiler, rather than a
    paraphrase of it in Rust. Everything it needs from fd_ballet_base.h is
    spelled out here. */

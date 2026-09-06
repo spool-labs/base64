@@ -5,11 +5,11 @@ edition = "2021"
 rust-version = "1.89"
 description = "Fast base64 encoding and decoding"
 license = "Apache-2.0"
-repository = "https://github.com/tape-public/base64"
+repository = "https://github.com/spool-labs/base64"
 keywords = ["base64", "simd", "neon", "avx2", "encoding"]
 categories = ["encoding", "no-std"]
 
-exclude = ["BENCHMARKS.md", "bench"]
+exclude = ["BENCHMARKS.md", "bench", "tools"]
 
 [lints.rust.unexpected_cfgs]
 level = "warn"

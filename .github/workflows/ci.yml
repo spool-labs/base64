@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: fmt and clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets
+      - run: cargo clippy --all-targets --no-default-features
+      - run: cargo clippy --all-targets --features std
+
+  test:
+    name: test (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86-64
+          - os: macos-latest
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Both profiles: debug catches the overflow checks, release catches what
+      # only shows up once the optimiser has been through the kernels.
+      - run: cargo test
+      - run: cargo test --release
+      # Dispatch stops at AVX2 without the feature, which is its own set of paths.
+      - run: cargo test --no-default-features
+      # The benchmarks are a separate workspace and break silently when the
+      # library's signatures move, so they are typechecked here.
+      - run: cargo check --benches
+        working-directory: bench
+
+  portable:
+    name: portable backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+      # No vector units and no std, which is the arm neither runner reaches.
+      - run: cargo build --lib --target thumbv6m-none-eabi
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.89
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --lib
+      - run: cargo check --lib --features std
