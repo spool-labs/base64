@@ -197,6 +197,12 @@ impl Decoder {
     /// Returns how many bytes were written. The call asks for an upper bound
     /// of what the piece can write, which a refusal found partway may leave
     /// partly unspent. What comes before a refusal stays written.
+    ///
+    /// A buffer short of that bound is refused before anything is read, so a
+    /// refusal consumes nothing and the decoder stands where it stood. Once a
+    /// refusal or a padded ending has been seen, every later push returns
+    /// `Ok(0)` while still counting the characters, and the refusal is named
+    /// again by `finish`.
     pub fn push(&mut self, input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
         match self.state {
             State::Reading => {}
@@ -208,7 +214,15 @@ impl Decoder {
         if input.is_empty() {
             return Ok(0);
         }
-        let needed = (usize::from(self.quad_len) + input.len()) / 4 * 3 + 2;
+        // Every 3 bytes written come out of 4 characters, held or arriving.
+        // A group closed by padding is written by `finish` instead, and it is
+        // the last of these groups exactly when the count divides by four.
+        let chars = usize::from(self.quad_len) + input.len();
+        let mut quads = chars / 4;
+        if self.is_padded && chars.is_multiple_of(4) && input.last() == Some(&b'=') {
+            quads -= 1;
+        }
+        let needed = quads * 3;
         if out.len() < needed {
             return Err(DecodeError::BufferTooSmall { needed });
         }

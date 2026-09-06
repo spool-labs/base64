@@ -252,13 +252,53 @@ fn short_encode_buffer() {
 #[test]
 fn short_decode_buffer() {
     let mut decoder = tape_base64::STANDARD.decoder();
-    let mut spot = [0u8; 1];
-
-    assert!(decoder.push(b"QQ==", &mut spot).is_err());
-
     let mut spot = [0u8; 5];
-    assert!(decoder.push(b"QQ==", &mut spot).is_ok());
-    assert_eq!(decoder.finish(&mut spot).unwrap(), 1);
+
+    // Two whole groups owe six bytes, and the refusal reads none of them.
+    assert_eq!(
+        decoder.push(b"QUJDREVG", &mut spot),
+        Err(DecodeError::BufferTooSmall { needed: 6 })
+    );
+
+    let mut room = [0u8; 6];
+    assert_eq!(decoder.push(b"QUJDREVG", &mut room).unwrap(), 6);
+    assert_eq!(&room, b"ABCDEF");
+    assert_eq!(decoder.finish(&mut []).unwrap(), 0);
+}
+
+// what the sizing helpers hand out is room enough for the pieces too
+#[test]
+fn helper_sized_buffers_are_accepted() {
+    const INPUTS: [&[u8]; 6] = [
+        b"QQ==",
+        b"aGVsbG8=",
+        b"QQQQ",
+        b"aGVsbG8h",
+        b"Zm8=",
+        b"Zm9vYmFy",
+    ];
+    for entry in &CODECS {
+        for input in INPUTS {
+            let Ok(exact) = entry.codec.decoded_len(input) else {
+                continue;
+            };
+            let mut whole = vec![0u8; exact];
+            let Ok(expected) = entry.codec.decode(input, &mut whole) else {
+                continue;
+            };
+
+            for room in [exact, entry.codec.decoded_len_max(input.len())] {
+                let mut out = vec![0u8; room];
+                let mut decoder = entry.codec.decoder();
+                let written = decoder
+                    .push(input, &mut out)
+                    .unwrap_or_else(|_| panic!("{} refused {room} bytes", entry.name));
+                let rest = decoder.finish(&mut out[written..]).expect("the same room");
+                assert_eq!(written + rest, expected, "{}", entry.name);
+                assert_eq!(out[..expected], whole[..expected], "{}", entry.name);
+            }
+        }
+    }
 }
 
 // a finish with no room for the ending refuses the way one whole call does
