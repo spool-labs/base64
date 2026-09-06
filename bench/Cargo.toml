@@ -1,0 +1,50 @@
+[package]
+name = "tape-base64-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+# Standalone rather than a workspace member, so the published crate carries
+# neither these benchmarks nor the crates they measure against.
+[workspace]
+
+[build-dependencies]
+cc = "1"
+
+[features]
+# Passes through to the crate under test, so a run on a VBMI machine can
+# measure the wide path against rivals that reach for it too.
+avx512 = ["tape-base64/avx512"]
+
+[dev-dependencies]
+base64 = "0.23"
+base64-simd = "0.8"
+base64-turbo = "0.3"
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+tape-base64 = { path = ".." }
+
+[[bench]]
+name = "against"
+harness = false
+
+[[bench]]
+name = "shape"
+harness = false
+
+[[bench]]
+name = "quick"
+harness = false
+
+[[bench]]
+name = "tail"
+harness = false
+
+[[bench]]
+name = "huge"
+harness = false
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

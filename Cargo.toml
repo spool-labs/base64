@@ -1,0 +1,28 @@
+[package]
+name = "tape-base64"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+description = "Fast base64 encoding and decoding"
+license = "Apache-2.0"
+repository = "https://github.com/tape-public/base64"
+keywords = ["base64", "simd", "neon", "avx2", "encoding"]
+categories = ["encoding", "no-std"]
+
+exclude = ["BENCHMARKS.md", "bench"]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(target_os, values("solana"))']
+
+[dependencies]
+
+[dev-dependencies]
+base64 = { version = "0.23", default-features = false, features = ["std"] }
+
+[features]
+default = ["avx512"]
+std = []
+
+# The AVX-512VBMI kernel, on by default. Without it dispatch stops at AVX2.
+avx512 = []

@@ -1,0 +1,18 @@
+tape-base64
+Copyright 2026 Tape
+
+Licensed under the Apache License, Version 2.0.
+
+The decoder's nibble classification tables follow the scheme published by
+Wojciech Muła and Daniel Lemire in their work on vectorised base64
+("Faster Base64 Encoding and Decoding Using AVX2 Instructions", and the
+accompanying base64simd reference code, BSD-2-Clause). The aarch64 block
+structure follows Alfred Klomp's aklomp/base64 (BSD-2-Clause). No code from
+either was copied; the tables here are re-derived and checked against the
+alphabet by test.
+
+The benchmark crate, which is not published, vendors
+src/ballet/base64/fd_base64.c from Firedancer (Apache-2.0, Jump Crypto and
+Firedancer Contributors) so that Firedancer's base64 can be measured as it is
+actually compiled rather than paraphrased. It is built only by the benchmarks
+and is not part of this crate.
