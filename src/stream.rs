@@ -155,6 +155,24 @@ pub struct Decoder {
     state: State,
 }
 
+/// Convert one whole quad into the room at the start of `out`
+///
+/// Refuses the first character of the quad outside the alphabet, named at
+/// `base` plus its place. A quad padded at its end never reaches here, since
+/// only what follows can say whether it was an ending.
+fn take_quad<A: Alphabet>(
+    quad: &[u8; 4],
+    base: usize,
+    out: &mut [u8],
+) -> Result<usize, DecodeError> {
+    // The walk stops on a character outside the alphabet without naming it,
+    // which is the same hand-off a vector block makes.
+    if scalar::decode_bulk::<A>(quad, out, 1) == 0 {
+        return Err(scalar::find_invalid::<A>(quad, base));
+    }
+    Ok(3)
+}
+
 /// Refuse a buffer short of the bytes a held group of `chars` characters owes
 ///
 /// Two characters carry one byte and three carry two, which is what a
@@ -332,7 +350,7 @@ impl Decoder {
                 let mut quad = [0u8; 4];
                 quad[..held].copy_from_slice(&self.quad[..held]);
                 quad[held..].copy_from_slice(&input[..take]);
-                match self.take_quad::<A>(&quad, self.total - held, &mut out[written..]) {
+                match take_quad::<A>(&quad, self.total - held, &mut out[written..]) {
                     Ok(count) => {
                         written += count;
                         self.total += take;
@@ -445,7 +463,7 @@ impl Decoder {
             if held == 3 {
                 // The group completes here, padding or not.
                 let quad = [self.quad[0], self.quad[1], self.quad[2], byte];
-                match self.take_quad::<A>(&quad, self.total - 4, &mut out[written..]) {
+                match take_quad::<A>(&quad, self.total - 4, &mut out[written..]) {
                     Ok(count) => written += count,
                     Err(cause) => {
                         return Err(self.refuse(Some(cause), 0, rest));
@@ -458,42 +476,6 @@ impl Decoder {
             }
         }
         Ok(written)
-    }
-
-    /// Convert one whole quad into the room at the start of `out`
-    ///
-    /// Refuses the first character of the quad outside the alphabet, named
-    /// at `base` plus its place. A quad padded at its end never reaches
-    /// here, since only what follows can say whether it was an ending.
-    fn take_quad<A: Alphabet>(
-        &mut self,
-        quad: &[u8; 4],
-        base: usize,
-        out: &mut [u8],
-    ) -> Result<usize, DecodeError> {
-        let values = [
-            A::DECODE[quad[0] as usize],
-            A::DECODE[quad[1] as usize],
-            A::DECODE[quad[2] as usize],
-            A::DECODE[quad[3] as usize],
-        ];
-        if let Some(place) = values
-            .iter()
-            .position(|&value| value == crate::alphabet::INVALID)
-        {
-            return Err(DecodeError::InvalidByte {
-                position: base + place,
-                byte: quad[place],
-            });
-        }
-        let value = (u32::from(values[0]) << 18)
-            | (u32::from(values[1]) << 12)
-            | (u32::from(values[2]) << 6)
-            | u32::from(values[3]);
-        for (place, slot) in out[..3].iter_mut().enumerate() {
-            *slot = (value >> (16 - place * 8)) as u8;
-        }
-        Ok(3)
     }
 
     /// Write a held group out, as the ending it has now been proven to be
