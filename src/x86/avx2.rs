@@ -3,10 +3,44 @@
 //! A shuffle indexes at most 16 bytes, so the alphabet is reached as a
 //! 16 entry table of offsets picked by where a value falls.
 
+#[cfg(not(miri))]
 use core::arch::asm;
 use core::arch::x86_64::*;
 
 use crate::alphabet::{Alphabet, ODD_VALUE};
+
+// An explicit import shadows the glob above, so the kernel below reads the
+// same whichever of the two is in scope.
+#[cfg(miri)]
+use shims::{_mm_sfence, _mm_stream_si128};
+
+/// Models of the two stores the interpreter has no version of
+///
+/// Compiled only under `cfg(miri)`.
+#[cfg(miri)]
+mod shims {
+    use core::arch::x86_64::{__m128i, _mm_storeu_si128};
+
+    /// `movntdq`: the same 16 bytes as an ordinary store, ordered more weakly
+    ///
+    /// The instruction faults on a destination that is not 16 byte aligned,
+    /// which is the part of it a run under the interpreter can check.
+    #[inline]
+    pub unsafe fn _mm_stream_si128(destination: *mut __m128i, value: __m128i) {
+        assert!(
+            destination.addr().is_multiple_of(16),
+            "a streaming store wants a 16 byte aligned destination"
+        );
+        // SAFETY: the caller promised 16 writable bytes.
+        unsafe { _mm_storeu_si128(destination, value) };
+    }
+
+    /// `sfence`: the stores before it land before any store after it
+    #[inline]
+    pub fn _mm_sfence() {
+        core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+    }
+}
 
 /// Bytes a block converts
 const BLOCK_IN: usize = 24;
@@ -249,6 +283,13 @@ unsafe fn put<const STREAM: bool>(destination: *mut u8, chars: __m256i) {
 #[target_feature(enable = "avx2")]
 unsafe fn mul_wide(value: __m256i, multiplier: __m256i) -> __m256i {
     let product: __m256i;
+    #[cfg(miri)]
+    {
+        // The interpreter has no assembler, and no optimiser to keep the
+        // multiply away from either.
+        product = _mm256_mullo_epi16(value, multiplier);
+    }
+    #[cfg(not(miri))]
     // SAFETY: one register to register instruction, no memory and no flags.
     unsafe {
         asm!(
@@ -271,6 +312,12 @@ unsafe fn mul_wide(value: __m256i, multiplier: __m256i) -> __m256i {
 #[target_feature(enable = "avx2")]
 unsafe fn mul_narrow(value: __m128i, multiplier: __m128i) -> __m128i {
     let product: __m128i;
+    #[cfg(miri)]
+    {
+        // The same stand-in as in `mul_wide`.
+        product = _mm_mullo_epi16(value, multiplier);
+    }
+    #[cfg(not(miri))]
     // SAFETY: one register to register instruction, no memory and no flags.
     unsafe {
         asm!(

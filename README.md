@@ -141,13 +141,55 @@ default, and `--no-default-features` stops dispatch at AVX2.
 
 The tables it indexes by are also checked on any machine, VBMI or not, by a
 scalar model of `vpermb`, `vpmultishiftqb` and `vpermi2b` held against the
-portable codec. That model cannot check that the intrinsics were called with
-their arguments in the right order, which is why running it on hardware was
-what settled it.
+portable codec. That model checks the tables and not the calls, so the kernel
+itself is run under Miri, where the argument order is checked with it.
 
 What has been checked on hardware is that the guard works: on Skylake-SP,
 which has AVX-512F, BW and VL but not VBMI, dispatch declines the wide path
 and runs AVX2, rather than reaching `vpermb` and faulting.
+
+## Verification
+
+Every kernel is held against the portable walk at every length, in both
+alphabets, and every refusal has to name the same character at the same
+offset. `tests/forced.rs` does that on each path the running processor can
+execute, pinned in turn, which needs the `internals` feature:
+
+```sh
+cargo test --features internals
+```
+
+The x86 kernels also run on a machine that has no x86 in it, under Miri and a
+foreign target, because the instructions the interpreter has no version of are
+modelled beside them: `vpermb`, `vpmultishiftqb`, the streaming store and its
+fence, and the `vpmullw` the AVX2 encoder writes as assembly. What runs is the
+kernel, addressing and argument order included.
+
+```sh
+RUSTFLAGS="-C target-feature=+avx512f,+avx512bw,+avx512vbmi" \
+  cargo +nightly miri test --target x86_64-unknown-linux-gnu \
+  --features internals --test forced
+```
+
+`cpuid` is not interpreted either, so under Miri the target features the build
+was given stand in for what a processor would report: the command above pins
+and runs the portable walk, AVX2 and AVX-512VBMI in turn, and without those
+`RUSTFLAGS` it runs the portable walk alone. The sweeps thin themselves under
+Miri, since a block is interpreted rather than executed, and the size below
+which the encoder will not stream drops from 64 KiB to 1 KiB so that an
+interpreted run reaches the streaming store at all.
+
+The aarch64 kernel cannot be run this way. Miri has no `vqtbl4q_u8`, and
+modelling the whole of `ld3`, `st4` and the structured loads beside it would
+be a second kernel to keep right.
+
+Reads past the end of a buffer are invisible to `cargo test`, since an
+over-read still produces the right answer, and valgrind is what finds them:
+
+```sh
+cargo test --release --features internals --test forced --no-run
+valgrind --error-exitcode=9 --quiet target/release/deps/forced-*
+```
 
 ## Block sizes
 

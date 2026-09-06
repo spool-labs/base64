@@ -13,7 +13,12 @@ pub use dispatch::{available, force, force_stream_floor, AVX2, PORTABLE, UNKNOWN
 
 /// Below this no cache is small enough for streaming to be the right answer,
 /// so a short buffer settles the question with one compare
+#[cfg(not(miri))]
 const STREAM_CANDIDATE: usize = 1 << 16;
+
+/// Low enough that an interpreted run reaches the streaming store at all
+#[cfg(miri)]
+const STREAM_CANDIDATE: usize = 1 << 10;
 
 /// Convert `groups` whole groups, returning how many were converted
 pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usize) -> usize {

@@ -10,6 +10,57 @@ use core::arch::x86_64::*;
 use crate::alphabet::Alphabet;
 use crate::wide::{expand, field_starts, gather_bytes};
 
+// An explicit import shadows the glob above, so the kernel below reads the
+// same whichever of the two is in scope.
+#[cfg(miri)]
+use shims::{_mm512_multishift_epi64_epi8, _mm512_permutexvar_epi8};
+
+/// Scalar models of the instructions the interpreter has no version of
+///
+/// Miri executes most of AVX-512 but not the byte permutes, so under it these
+/// stand in, written from what the manual says each instruction does. They are
+/// how the kernel's addressing is checked on a machine without VBMI, and they
+/// are compiled only under `cfg(miri)`.
+#[cfg(miri)]
+mod shims {
+    use core::arch::x86_64::__m512i;
+    use core::mem::transmute;
+
+    /// `vpermb`: every result byte is the `data` byte its index's low 6 bits name
+    #[inline]
+    pub unsafe fn _mm512_permutexvar_epi8(index: __m512i, data: __m512i) -> __m512i {
+        // SAFETY: both are 64 bytes, and so is the array either becomes.
+        unsafe {
+            let index: [u8; 64] = transmute(index);
+            let data: [u8; 64] = transmute(data);
+            let mut out = [0u8; 64];
+            for (slot, &which) in out.iter_mut().zip(index.iter()) {
+                *slot = data[usize::from(which & 63)];
+            }
+            transmute(out)
+        }
+    }
+
+    /// `vpmultishiftqb`: every result byte is 8 bits of its own 64-bit lane,
+    /// starting where the low 6 bits of its control byte say, wrapping at the top
+    #[inline]
+    pub unsafe fn _mm512_multishift_epi64_epi8(control: __m512i, data: __m512i) -> __m512i {
+        // SAFETY: 64 bytes either way, whether read as bytes or as lanes.
+        unsafe {
+            let control: [u8; 64] = transmute(control);
+            let lanes: [u64; 8] = transmute(data);
+            let mut out = [0u8; 64];
+            for (slot, (&start, lane)) in out
+                .iter_mut()
+                .zip(control.iter().zip(lanes.iter().flat_map(|lane| [lane; 8])))
+            {
+                *slot = lane.rotate_right(u32::from(start & 63)) as u8;
+            }
+            transmute(out)
+        }
+    }
+}
+
 /// Groups a block converts
 const BLOCK_GROUPS: usize = 16;
 

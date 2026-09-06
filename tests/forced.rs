@@ -25,6 +25,31 @@ use tape_base64::{Codec, DecodeError, STANDARD_NO_PAD, URL_SAFE_NO_PAD};
 /// Held for as long as a path is pinned, so two tests never pin at once
 static PIN: Mutex<()> = Mutex::new(());
 
+/// Lengths that put every block size against every remainder, and a few long
+/// enough that the loop runs many times
+///
+/// Under Miri every block is interpreted rather than executed, so the sweep is
+/// cut to the block boundaries and their neighbours.
+fn lengths() -> Vec<usize> {
+    if !cfg!(miri) {
+        let mut lengths: Vec<usize> = (0..=512).collect();
+        lengths.extend([1232, 4096, 4097]);
+        return lengths;
+    }
+    let mut lengths = vec![0, 1, 2, 3, 4, 5, 512];
+    for edge in [
+        12, 16, 24, 32, 48, 64, 72, 96, 128, 192, 210, 216, 256, 288, 384,
+    ] {
+        lengths.extend([edge - 1, edge, edge + 1]);
+    }
+    lengths
+}
+
+/// One in `step` of a sweep under Miri, all of it anywhere else
+fn thinned(count: usize, step: usize) -> impl Iterator<Item = usize> {
+    (0..count).step_by(if cfg!(miri) { step } else { 1 })
+}
+
 /// Take `PIN`, ignoring a poisoning left by an earlier failure
 fn pinned() -> MutexGuard<'static, ()> {
     PIN.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -89,10 +114,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
             .join(", ")
     );
 
-    // Lengths that put every block size against every remainder, and a few
-    // long enough that the loop runs many times
-    let mut lengths: Vec<usize> = (0..=512).collect();
-    lengths.extend([1232, 4096, 4097]);
+    let lengths = lengths();
 
     let mut rng = Rng::new(0x5A5A_1234);
     let mut input = vec![0u8; 4200];
@@ -130,7 +152,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
     // the offset it sits at, wherever in a block that falls
     for &(path_name, path) in &paths {
         pin(path);
-        for position in 0..256 {
+        for position in thinned(256, 11) {
             let mut encoded = vec![b'A'; 256];
             encoded[position] = b'\n';
             let mut out = vec![0u8; 192];
@@ -148,7 +170,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
     // A refusal has to be the same refusal on every path: the same reason, at
     // the same offset, and the same bytes written before it
     let mut rng = Rng::new(0x4A3B_2C1D);
-    let mut source = vec![0u8; 300];
+    let mut source = vec![0u8; if cfg!(miri) { 96 } else { 300 }];
     rng.fill(&mut source);
 
     for entry in &CODECS {
@@ -160,7 +182,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
         let mut clean = vec![0u8; needed];
         codec.encode(&source, &mut clean).expect("exactly enough");
 
-        for position in 0..clean.len() {
+        for position in thinned(clean.len(), 13) {
             for byte in [b'*', b'=', b'\n', 0xFF] {
                 let mut corrupted = clean.clone();
                 corrupted[position] = byte;
@@ -252,7 +274,7 @@ fn lengths_whose_groups_end_at_the_buffer() {
         pin(path);
         // Every length that is a whole number of groups, across the sizes
         // where the unrolled run starts and stops being used
-        for groups in 1..600 {
+        for groups in (1..600).step_by(if cfg!(miri) { 11 } else { 1 }) {
             let len = groups * 3;
             let mut input = vec![0u8; len];
             rng.fill(&mut input);
@@ -290,9 +312,12 @@ fn the_streaming_store_writes_what_the_walk_would() {
     testing::force_stream_floor(64);
 
     let mut rng = Rng::new(0x5EED_1234_ABCD_0001);
-    // Past the size below which the dispatcher will not even ask, and across
-    // enough lengths to cover every block boundary the run can end on.
-    for len in (1 << 16..(1 << 16) + 48).chain([100_000, 131_072]) {
+    // Past the size below which the dispatcher will not even ask, which the
+    // kernel lowers under Miri so that an interpreted run can reach it.
+    let candidate = if cfg!(miri) { 1 << 10 } else { 1 << 16 };
+    // Enough lengths to cover every block boundary the run can end on.
+    let sweep = (candidate..candidate + 48).step_by(if cfg!(miri) { 7 } else { 1 });
+    for len in sweep.chain([candidate * 2]) {
         let mut input = vec![0u8; len];
         rng.fill(&mut input);
         for codec in CODECS {

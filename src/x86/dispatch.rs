@@ -1,5 +1,7 @@
 //! Which codec the running machine can execute, asked once and remembered
 
+use core::arch::x86_64::CpuidResult;
+#[cfg(not(miri))]
 use core::arch::x86_64::{__cpuid, __cpuid_count, _xgetbv};
 use core::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 
@@ -51,7 +53,28 @@ fn named(chosen: u8) -> Path {
     }
 }
 
+/// The widest path the build allows, where there is no `cpuid` to ask
+///
+/// Miri interprets the instructions but not `cpuid`, so under it the target
+/// features the build was given stand in for what a processor would report.
+#[cfg(miri)]
+pub fn available() -> u8 {
+    if cfg!(all(
+        feature = "avx512",
+        target_feature = "avx512f",
+        target_feature = "avx512bw",
+        target_feature = "avx512vbmi"
+    )) {
+        WIDE
+    } else if cfg!(target_feature = "avx2") {
+        AVX2
+    } else {
+        PORTABLE
+    }
+}
+
 /// The widest path this machine can run, without recording it
+#[cfg(not(miri))]
 pub fn available() -> u8 {
     // SAFETY: each leaf and `xgetbv` is reached only once an earlier answer
     // has said it is there.
@@ -129,38 +152,56 @@ pub(crate) fn stream_floor() -> usize {
     }
 }
 
-/// Bytes in the last level cache, or nothing if the processor will not say
+/// One `cpuid` leaf, or all zeros where the interpreter has no `cpuid`
+///
+/// A processor answering zero describes no caches, which is the answer that
+/// leaves the streaming floor out of reach.
 // `cpuid` became a safe call after the msrv, where the block is still needed.
 #[allow(unused_unsafe)]
-fn last_level_bytes() -> Option<usize> {
-    // SAFETY: leaf 0 and leaf 0x80000000 each say how far their range goes,
-    // and neither descriptor leaf is read before its range covers it.
-    unsafe {
-        let extended = __cpuid(0x8000_0000).eax;
-        // AMD describes its caches on 0x8000001D, Intel on 4, in one shape.
-        let leaf = if extended >= 0x8000_001D {
-            0x8000_001D
-        } else if __cpuid(0).eax >= 4 {
-            4
-        } else {
-            return None;
-        };
-        let mut largest = 0;
-        for index in 0..16 {
-            let cache = __cpuid_count(leaf, index);
-            // A type of zero means there are no more.
-            if cache.eax & 0x1f == 0 {
-                break;
-            }
-            if (cache.eax >> 5) & 0x7 < 3 {
-                continue;
-            }
-            if let Some(bytes) = cache_bytes(cache.ebx, cache.ecx) {
-                largest = largest.max(bytes);
-            }
+fn cpuid(leaf: u32, index: u32) -> CpuidResult {
+    #[cfg(miri)]
+    {
+        let _ = (leaf, index);
+        CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: 0,
         }
-        (largest > 0).then_some(largest)
     }
+    #[cfg(not(miri))]
+    // SAFETY: every caller has read the leaf that says this one is there.
+    unsafe {
+        __cpuid_count(leaf, index)
+    }
+}
+
+/// Bytes in the last level cache, or nothing if the processor will not say
+fn last_level_bytes() -> Option<usize> {
+    let extended = cpuid(0x8000_0000, 0).eax;
+    // AMD describes its caches on 0x8000001D, Intel on 4, in one shape.
+    let leaf = if extended >= 0x8000_001D {
+        0x8000_001D
+    } else if cpuid(0, 0).eax >= 4 {
+        4
+    } else {
+        return None;
+    };
+    let mut largest = 0;
+    for index in 0..16 {
+        let cache = cpuid(leaf, index);
+        // A type of zero means there are no more.
+        if cache.eax & 0x1f == 0 {
+            break;
+        }
+        if (cache.eax >> 5) & 0x7 < 3 {
+            continue;
+        }
+        if let Some(bytes) = cache_bytes(cache.ebx, cache.ecx) {
+            largest = largest.max(bytes);
+        }
+    }
+    (largest > 0).then_some(largest)
 }
 
 /// Bytes a cache descriptor stands for, or nothing where it is not believable
