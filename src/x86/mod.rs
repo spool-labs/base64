@@ -46,6 +46,7 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
     match dispatch::path() {
         // SAFETY: cpuid reported the path, so the instructions are present.
         Path::Wide => unsafe { avx512::decode_bulk::<A>(input, out, quads) },
+        // SAFETY: cpuid reported the path, so the instructions are present.
         Path::Avx2 => unsafe { avx2::decode_bulk::<A>(input, out, quads) },
         Path::Portable => 0,
     }
