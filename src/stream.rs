@@ -78,15 +78,16 @@ impl Encoder {
         if out.len() < count {
             return Err(EncodeError::BufferTooSmall { needed: count });
         }
-        match self.kind {
+        let written = match self.kind {
             Kind::Standard => {
                 scalar::encode_rest::<Standard>(&self.held[..held], out, self.is_padded)
             }
             Kind::UrlSafe => {
                 scalar::encode_rest::<UrlSafe>(&self.held[..held], out, self.is_padded)
             }
-        }
-        Ok(count)
+        };
+        debug_assert_eq!(written, count);
+        Ok(written)
     }
 
     /// Convert `groups` whole groups out of the held bytes and `input`

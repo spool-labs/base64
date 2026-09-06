@@ -19,13 +19,12 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
             encode_group::<A>(group, &mut out[at * 4..]);
             at += 1;
         }
-        return groups;
+        return at;
     }
     let chars = A::ENCODE;
     let (taken, room) = (input.len(), out.len());
     debug_assert!(groups * 3 <= taken && groups * 4 <= room);
-    let mut read = 0;
-    let mut written = 0;
+    let mut done = 0;
 
     // Two groups at a time, because 6 bytes fit one word and the 8 characters
     // they spell fit another. The clamps never fire.
@@ -42,28 +41,34 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
         for (place, spelled) in slot.iter_mut().enumerate() {
             *spelled = chars[((word >> (42 - place * 6)) & 0x3F) as usize];
         }
-        read += 6;
-        written += 8;
+        done += 2;
     }
 
-    let rest = groups - pairs * 2;
-    for (group, slot) in input[read.min(taken)..(read + rest * 3).min(taken)]
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .zip(
-            out[written.min(room)..(written + rest * 4).min(room)]
-                .as_chunks_mut::<4>()
-                .0,
-        )
-    {
-        let value = (u32::from(group[0]) << 16) | (u32::from(group[1]) << 8) | u32::from(group[2]);
-        for (place, spelled) in slot.iter_mut().enumerate() {
-            *spelled = chars[((value >> (18 - place * 6)) & 0x3F) as usize];
+    // A pair the clamps cut short would leave the odd group at the wrong
+    // offset, so it only runs where every pair landed.
+    if done == pairs * 2 {
+        let (read, written) = (done * 3, done * 4);
+        let rest = groups - done;
+        for (group, slot) in input[read.min(taken)..(read + rest * 3).min(taken)]
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(
+                out[written.min(room)..(written + rest * 4).min(room)]
+                    .as_chunks_mut::<4>()
+                    .0,
+            )
+        {
+            let value =
+                (u32::from(group[0]) << 16) | (u32::from(group[1]) << 8) | u32::from(group[2]);
+            for (place, spelled) in slot.iter_mut().enumerate() {
+                *spelled = chars[((value >> (18 - place * 6)) & 0x3F) as usize];
+            }
+            done += 1;
         }
     }
 
-    groups
+    done
 }
 
 /// Spell one whole group into four characters
@@ -75,7 +80,9 @@ pub(crate) fn encode_group<A: Alphabet>(group: [u8; 3], out: &mut [u8]) {
 }
 
 /// Convert the one or two bytes a group short of three, with padding if asked
-pub(crate) fn encode_rest<A: Alphabet>(input: &[u8], out: &mut [u8], is_padded: bool) {
+///
+/// Returns how many characters were written. `out` must have room for them.
+pub(crate) fn encode_rest<A: Alphabet>(input: &[u8], out: &mut [u8], is_padded: bool) -> usize {
     let chars = A::ENCODE;
     // Matched as a pattern, so nothing needs a length check.
     let (spelled, count) = match input {
@@ -94,11 +101,14 @@ pub(crate) fn encode_rest<A: Alphabet>(input: &[u8], out: &mut [u8], is_padded: 
             ];
             (spelled, if is_padded { 4 } else { 3 })
         }
-        _ => return,
+        // Nothing is left over: a whole group goes to the bulk stage.
+        rest => {
+            debug_assert!(rest.is_empty(), "a whole group reached the tail");
+            return 0;
+        }
     };
-    if out.len() >= count {
-        out[..count].copy_from_slice(&spelled[..count]);
-    }
+    out[..count].copy_from_slice(&spelled[..count]);
+    count
 }
 
 /// Convert up to `quads` whole 4-character groups, returning how many
@@ -159,6 +169,8 @@ pub(crate) fn find_invalid<A: Alphabet>(input: &[u8], offset: usize) -> DecodeEr
 }
 
 /// Convert the two or three characters a group short of four
+///
+/// Returns how many bytes were written. `out` must have room for them.
 pub(crate) fn decode_rest<A: Alphabet>(
     input: &[u8],
     out: &mut [u8],
@@ -166,8 +178,8 @@ pub(crate) fn decode_rest<A: Alphabet>(
 ) -> Result<usize, DecodeError> {
     let values = A::DECODE;
     // Every value outside the alphabet has its top bit set.
-    match (input, out) {
-        ([first, second], [byte, ..]) => {
+    match input {
+        [first, second] => {
             let (high, low) = (values[*first as usize], values[*second as usize]);
             if (high | low) & 0x80 != 0 {
                 return Err(find_invalid::<A>(input, offset));
@@ -180,10 +192,10 @@ pub(crate) fn decode_rest<A: Alphabet>(
                     byte: *second,
                 });
             }
-            *byte = (high << 2) | (low >> 4);
+            out[0] = (high << 2) | (low >> 4);
             Ok(1)
         }
-        ([first, second, third], [one, two, ..]) => {
+        [first, second, third] => {
             let (high, middle, low) = (
                 values[*first as usize],
                 values[*second as usize],
@@ -198,10 +210,50 @@ pub(crate) fn decode_rest<A: Alphabet>(
                     byte: *third,
                 });
             }
-            *one = (high << 2) | (middle >> 4);
-            *two = (middle << 4) | (low >> 2);
+            out[0] = (high << 2) | (middle >> 4);
+            out[1] = (middle << 4) | (low >> 2);
             Ok(2)
         }
-        _ => Ok(0),
+        // Nothing is left over: a whole group goes to the bulk stage, and a
+        // single character is a length every caller has already refused.
+        rest => {
+            debug_assert!(rest.is_empty(), "a whole group reached the tail");
+            Ok(0)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alphabet::Standard;
+
+    // the walk that covers up to three groups says how many it spelled, not
+    // how many it was asked for
+    #[test]
+    fn a_short_walk_counts_what_it_spelled() {
+        let input = [1u8; 9];
+        let mut out = [0u8; 4];
+        assert_eq!(encode_bulk::<Standard>(&input, &mut out, 3), 1);
+
+        let mut out = [0u8; 12];
+        assert_eq!(encode_bulk::<Standard>(&input, &mut out, 3), 3);
+        assert_eq!(encode_bulk::<Standard>(&input[..3], &mut out, 1), 1);
+    }
+
+    // both tails say how much of the buffer they took
+    #[test]
+    fn the_tails_count_what_they_wrote() {
+        let mut out = [0u8; 4];
+        assert_eq!(encode_rest::<Standard>(b"a", &mut out, true), 4);
+        assert_eq!(encode_rest::<Standard>(b"ab", &mut out, false), 3);
+        assert_eq!(encode_rest::<Standard>(b"", &mut out, true), 0);
+
+        let mut bytes = [0u8; 2];
+        assert_eq!(decode_rest::<Standard>(b"YQ", &mut bytes, 0), Ok(1));
+        assert_eq!(bytes[0], b'a');
+        assert_eq!(decode_rest::<Standard>(b"YWI", &mut bytes, 0), Ok(2));
+        assert_eq!(&bytes, b"ab");
+        assert_eq!(decode_rest::<Standard>(b"", &mut bytes, 0), Ok(0));
     }
 }
