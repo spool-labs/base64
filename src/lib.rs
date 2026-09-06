@@ -106,7 +106,7 @@ impl Codec {
     /// The most bytes the decoding of `len` characters can take
     #[inline]
     pub const fn decoded_len_max(&self, len: usize) -> usize {
-        len / 4 * 3 + (len % 4).saturating_sub(1)
+        decoded_len(len)
     }
 
     /// Bytes `input` decodes to, sized from its length and padding alone
@@ -141,7 +141,7 @@ impl Codec {
     pub fn decode(&self, input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
         let payload = self.payload(input)?;
         let quads = payload.len() / 4;
-        let needed = quads * 3 + (payload.len() - quads * 4).saturating_sub(1);
+        let needed = decoded_len(payload.len());
         if out.len() < needed {
             return Err(DecodeError::BufferTooSmall { needed });
         }
@@ -156,19 +156,11 @@ impl Codec {
     #[inline]
     fn payload<'input>(&self, input: &'input [u8]) -> Result<&'input [u8], DecodeError> {
         let len = input.len();
-        if !self.is_padded {
-            // One character past a group carries 6 bits, short of a byte.
-            if len % 4 == 1 {
-                return Err(DecodeError::InvalidLength { length: len });
-            }
-            return Ok(input);
-        }
-
-        if !len.is_multiple_of(4) {
+        if !length_ok(len, self.is_padded) {
             return Err(DecodeError::InvalidLength { length: len });
         }
-        // Past this check the last group is always there to read.
-        if len < 4 {
+        // Past this check the last group of a padded input is there to read.
+        if !self.is_padded || len < 4 {
             return Ok(input);
         }
 
@@ -185,8 +177,20 @@ impl Codec {
 }
 
 /// Bytes that a payload of `len` characters, padding already off, decodes to
-const fn decoded_len(len: usize) -> usize {
+pub(crate) const fn decoded_len(len: usize) -> usize {
     len / 4 * 3 + (len % 4).saturating_sub(1)
+}
+
+/// Whether `len` characters are a count some encoding produces
+///
+/// One character past a whole group carries 6 bits, short of a byte, and a
+/// padded encoding is always a whole number of groups.
+pub(crate) const fn length_ok(len: usize, is_padded: bool) -> bool {
+    if is_padded {
+        len.is_multiple_of(4)
+    } else {
+        len % 4 != 1
+    }
 }
 
 /// The most whole groups whose encoding still has a length

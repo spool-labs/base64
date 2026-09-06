@@ -575,12 +575,7 @@ impl Decoder {
 
     /// Apply the length rule a whole-input decode applies before reading
     fn check_length(&self) -> Result<(), DecodeError> {
-        let valid = if self.is_padded {
-            self.total.is_multiple_of(4)
-        } else {
-            self.total % 4 != 1
-        };
-        if valid {
+        if crate::length_ok(self.total, self.is_padded) {
             Ok(())
         } else {
             Err(DecodeError::InvalidLength { length: self.total })
