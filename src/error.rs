@@ -69,7 +69,10 @@ impl fmt::Display for DecodeError {
                 write!(f, "invalid encoded length {length}")
             }
             DecodeError::InvalidLastSymbol { position, byte } => {
-                write!(f, "symbol {byte:#04x} at offset {position} has bits to spare")
+                write!(
+                    f,
+                    "symbol {byte:#04x} at offset {position} has bits to spare"
+                )
             }
             DecodeError::InvalidPadding { position } => {
                 write!(f, "invalid padding at offset {position}")

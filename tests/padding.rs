@@ -65,7 +65,10 @@ fn every_trailing_bit_pattern_is_judged_like_the_reference() {
                 let outcome = common::decode_to_vec(entry.codec, &three);
                 if value & 0x03 == 0 {
                     let mine = outcome.expect("the spare bits are clear");
-                    let theirs = entry.reference.decode(&three).expect("the reference agrees");
+                    let theirs = entry
+                        .reference
+                        .decode(&three)
+                        .expect("the reference agrees");
                     assert_eq!(mine, theirs, "{name} groups {groups} value {value}");
                 } else {
                     assert_eq!(
@@ -133,7 +136,7 @@ fn the_padding_matrix() {
             // A whole group of padding, which is three pad characters in the
             // last group whichever way the length falls
             let mut group = encoded.clone();
-            group.extend([b'=', b'=', b'=', b'=']);
+            group.extend_from_slice(b"====");
             assert!(
                 common::decode_to_vec(entry.codec, &group).is_err(),
                 "{name} accepted a group of padding at length {length}"

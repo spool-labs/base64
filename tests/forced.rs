@@ -154,7 +154,9 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
     for entry in &CODECS {
         let (name, codec) = (entry.name, entry.codec);
         pin(testing::PORTABLE);
-        let needed = codec.encoded_len(source.len()).expect("a length this small");
+        let needed = codec
+            .encoded_len(source.len())
+            .expect("a length this small");
         let mut clean = vec![0u8; needed];
         codec.encode(&source, &mut clean).expect("exactly enough");
 
@@ -212,7 +214,10 @@ fn every_path_accepts_exactly_the_alphabet() {
 
             let accepted = URL_SAFE_NO_PAD.decode(&encoded, &mut out).is_ok();
             let in_alphabet = byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_';
-            assert_eq!(accepted, in_alphabet, "path {path} url-safe, byte {byte:#04x}");
+            assert_eq!(
+                accepted, in_alphabet,
+                "path {path} url-safe, byte {byte:#04x}"
+            );
         }
     }
     pin(widest);
@@ -253,7 +258,10 @@ fn lengths_whose_groups_end_at_the_buffer() {
             rng.fill(&mut input);
             // Exactly sized, so the allocation ends where the input does
             let mut encoded = vec![0u8; len / 3 * 4];
-            assert_eq!(STANDARD_NO_PAD.encode(&input, &mut encoded).unwrap(), encoded.len());
+            assert_eq!(
+                STANDARD_NO_PAD.encode(&input, &mut encoded).unwrap(),
+                encoded.len()
+            );
 
             let mut back = vec![0u8; len];
             assert_eq!(STANDARD_NO_PAD.decode(&encoded, &mut back).unwrap(), len);
@@ -290,7 +298,10 @@ fn the_streaming_store_writes_what_the_walk_would() {
         for codec in CODECS {
             let wanted = codec.codec.encoded_len(len).unwrap();
             let (mut room, at) = aligned(wanted);
-            let written = codec.codec.encode(&input, &mut room[at..at + wanted]).unwrap();
+            let written = codec
+                .codec
+                .encode(&input, &mut room[at..at + wanted])
+                .unwrap();
             assert_eq!(written, wanted, "len {len}");
 
             let mut expected = vec![0u8; wanted];

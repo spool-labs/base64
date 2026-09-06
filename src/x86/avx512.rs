@@ -32,7 +32,11 @@ static GATHER: [i8; 64] = gather_bytes();
 ///
 /// The running machine must have AVX-512F, BW and VBMI.
 #[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
-pub(crate) unsafe fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usize) -> usize {
+pub(crate) unsafe fn encode_bulk<A: Alphabet>(
+    input: &[u8],
+    out: &mut [u8],
+    groups: usize,
+) -> usize {
     if groups == 0 || groups * 3 > input.len() || groups * 4 > out.len() {
         return 0;
     }
@@ -70,7 +74,11 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], grou
             let spread = _mm512_permutexvar_epi8(expand, data);
             let fields = _mm512_multishift_epi64_epi8(starts, spread);
             let spelled = _mm512_permutexvar_epi8(fields, alphabet);
-            _mm512_mask_storeu_epi8(destination.add(done * 4).cast(), mask_for(taking * 4), spelled);
+            _mm512_mask_storeu_epi8(
+                destination.add(done * 4).cast(),
+                mask_for(taking * 4),
+                spelled,
+            );
         }
         groups
     }
@@ -158,7 +166,10 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
             _mm512_storeu_si512(destination.add(done * 3).cast(), first);
             _mm512_storeu_si512(destination.add((done + BLOCK_GROUPS) * 3).cast(), second);
             _mm512_storeu_si512(destination.add((done + 2 * BLOCK_GROUPS) * 3).cast(), third);
-            _mm512_storeu_si512(destination.add((done + 3 * BLOCK_GROUPS) * 3).cast(), fourth);
+            _mm512_storeu_si512(
+                destination.add((done + 3 * BLOCK_GROUPS) * 3).cast(),
+                fourth,
+            );
 
             // A tree rather than a chain: none of these waits on the one
             // before it, and only the last waits on `bad`.
@@ -200,7 +211,11 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
             let paired = _mm512_maddubs_epi16(values, _mm512_set1_epi32(0x0140_0140));
             let merged = _mm512_madd_epi16(paired, _mm512_set1_epi32(0x0001_1000));
             let packed = _mm512_permutexvar_epi8(gather, merged);
-            _mm512_mask_storeu_epi8(destination.add(done * 3).cast(), mask_for(taking * 3), packed);
+            _mm512_mask_storeu_epi8(
+                destination.add(done * 3).cast(),
+                mask_for(taking * 3),
+                packed,
+            );
         }
         quads
     }

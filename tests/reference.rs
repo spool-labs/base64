@@ -47,7 +47,9 @@ fn encoding_matches_the_reference() {
             "url-safe, length {len}"
         );
 
-        let written = tape_base64::STANDARD_NO_PAD.encode(input, &mut ours).unwrap();
+        let written = tape_base64::STANDARD_NO_PAD
+            .encode(input, &mut ours)
+            .unwrap();
         assert_eq!(
             core::str::from_utf8(&ours[..written]).unwrap(),
             standard_no_pad().encode(input),

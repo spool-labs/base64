@@ -189,7 +189,10 @@ mod tests {
             let table = A::DECODE[byte as usize];
             let nibbles = nibble_decode::<A>(byte);
             match nibbles {
-                None => assert_eq!(table, INVALID, "byte {byte:#04x} accepted by one, not the other"),
+                None => assert_eq!(
+                    table, INVALID,
+                    "byte {byte:#04x} accepted by one, not the other"
+                ),
                 Some(value) => assert_eq!(table, value, "byte {byte:#04x} decoded two ways"),
             }
         }

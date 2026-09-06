@@ -31,8 +31,10 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
     // they spell fit another. The clamps never fire.
     let pairs = groups / 2;
     for (group, slot) in input[..(pairs * 6).min(taken)]
-        .chunks_exact(6)
-        .zip(out[..(pairs * 8).min(room)].chunks_exact_mut(8))
+        .as_chunks::<6>()
+        .0
+        .iter()
+        .zip(out[..(pairs * 8).min(room)].as_chunks_mut::<8>().0)
     {
         let mut word = [0u8; 8];
         word[..6].copy_from_slice(group);
@@ -46,8 +48,14 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
 
     let rest = groups - pairs * 2;
     for (group, slot) in input[read.min(taken)..(read + rest * 3).min(taken)]
-        .chunks_exact(3)
-        .zip(out[written.min(room)..(written + rest * 4).min(room)].chunks_exact_mut(4))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(
+            out[written.min(room)..(written + rest * 4).min(room)]
+                .as_chunks_mut::<4>()
+                .0,
+        )
     {
         let value = (u32::from(group[0]) << 16) | (u32::from(group[1]) << 8) | u32::from(group[2]);
         for (place, spelled) in slot.iter_mut().enumerate() {
@@ -107,8 +115,10 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
     let mut done = 0;
 
     for (group, slot) in input[..(quads * 4).min(taken)]
-        .chunks_exact(4)
-        .zip(out[..(quads * 3).min(room)].chunks_exact_mut(3))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(out[..(quads * 3).min(room)].as_chunks_mut::<3>().0)
     {
         let first = values[group[0] as usize];
         let second = values[group[1] as usize];

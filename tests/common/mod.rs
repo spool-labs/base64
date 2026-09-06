@@ -95,7 +95,9 @@ pub const CODECS: [Compared; 4] = [
 
 /// Encode into a buffer of exactly the length the codec asks for
 pub fn encode_to_vec(codec: Codec, input: &[u8]) -> Vec<u8> {
-    let needed = codec.encoded_len(input.len()).expect("a length with an encoding");
+    let needed = codec
+        .encoded_len(input.len())
+        .expect("a length with an encoding");
     let mut encoded = vec![0u8; needed];
     let written = codec
         .encode(input, &mut encoded)

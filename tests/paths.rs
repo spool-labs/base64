@@ -236,7 +236,10 @@ fn every_length_of_the_vector_stage_agrees_with_the_portable_walk() {
             let (taken, put) = testing::vector_decode_bulk(&walked, &mut bytes, is_url_safe);
             assert_eq!(taken % 4, 0, "a block that is not whole groups");
             assert_eq!(put, taken / 4 * 3);
-            assert!(taken <= walked.len(), "the stage took more than it was given");
+            assert!(
+                taken <= walked.len(),
+                "the stage took more than it was given"
+            );
             assert_eq!(
                 bytes[..put],
                 input[..put],

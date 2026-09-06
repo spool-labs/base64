@@ -4,15 +4,15 @@
 //! one `tbl` spells them, and `st4` writes them back interleaved.
 
 use core::arch::aarch64::{
-    uint8x16_t, uint8x16x3_t, uint8x16x4_t, uint8x8_t, uint8x8x3_t, uint8x8x4_t, vaddq_u8,
-    vand_u8, vandq_u32, vandq_u8, vbslq_u8, vceqq_u8, vcombine_u8, vdup_n_u8, vdupq_n_u32,
-    vdupq_n_u8, vget_high_u8, vget_low_u8, vgetq_lane_u32, vld1_dup_u32, vld1_u8, vld1q_u8,
-    vld1q_u8_x4, vld3_u8, vld3q_u8, vld4_u8, vld4q_u8, vmaxvq_u8, vmulq_u16, vorr_u8, vorrq_u16,
-    vorrq_u32, vorrq_u8, vqtbl1q_u8, vqtbl4q_u8, vreinterpret_u8_u32, vreinterpretq_u16_u32,
+    uint8x16_t, uint8x16x3_t, uint8x16x4_t, uint8x8_t, uint8x8x3_t, uint8x8x4_t, vaddq_u8, vand_u8,
+    vandq_u32, vandq_u8, vbslq_u8, vceqq_u8, vcombine_u8, vdup_n_u8, vdupq_n_u32, vdupq_n_u8,
+    vget_high_u8, vget_low_u8, vgetq_lane_u32, vld1_dup_u32, vld1_u8, vld1q_u8, vld1q_u8_x4,
+    vld3_u8, vld3q_u8, vld4_u8, vld4q_u8, vmaxvq_u8, vmulq_u16, vorr_u8, vorrq_u16, vorrq_u32,
+    vorrq_u8, vqtbl1q_u8, vqtbl4q_u8, vreinterpret_u8_u32, vreinterpretq_u16_u32,
     vreinterpretq_u16_u8, vreinterpretq_u32_u16, vreinterpretq_u32_u8, vreinterpretq_u8_u16,
-    vreinterpretq_u8_u32, vshl_n_u8, vshlq_n_u32, vshlq_n_u8, vshr_n_u8, vshrq_n_u16,
-    vshrq_n_u32, vshrq_n_u8, vsli_n_u8, vsliq_n_u8, vsri_n_u8, vsriq_n_u8, vst1_u8, vst1q_u8,
-    vst3_u8, vst3q_u8, vst4_u8, vst4q_u8,
+    vreinterpretq_u8_u32, vshl_n_u8, vshlq_n_u32, vshlq_n_u8, vshr_n_u8, vshrq_n_u16, vshrq_n_u32,
+    vshrq_n_u8, vsli_n_u8, vsliq_n_u8, vsri_n_u8, vsriq_n_u8, vst1_u8, vst1q_u8, vst3_u8, vst3q_u8,
+    vst4_u8, vst4q_u8,
 };
 
 use crate::alphabet::{Alphabet, ODD_VALUE};
@@ -270,9 +270,15 @@ unsafe fn encode_short(table: &uint8x16x4_t, source: *const u8, destination: *mu
         // multiply by a different power of two in each half is two shifts in one
         // instruction: 5 instructions rather than 11.
         let halves = vreinterpretq_u16_u8(gathered);
-        let aligned = vshrq_n_u16::<10>(vmulq_u16(halves, vreinterpretq_u16_u32(vdupq_n_u32(0x0010_0001))));
+        let aligned = vshrq_n_u16::<10>(vmulq_u16(
+            halves,
+            vreinterpretq_u16_u32(vdupq_n_u32(0x0010_0001)),
+        ));
         let masked = vmulq_u16(
-            vreinterpretq_u16_u32(vandq_u32(vreinterpretq_u32_u16(halves), vdupq_n_u32(0x003F_03F0))),
+            vreinterpretq_u16_u32(vandq_u32(
+                vreinterpretq_u32_u16(halves),
+                vdupq_n_u32(0x003F_03F0),
+            )),
             vreinterpretq_u16_u32(vdupq_n_u32(0x0100_0010)),
         );
         let values = vreinterpretq_u8_u16(vorrq_u16(aligned, masked));
@@ -337,11 +343,7 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
                     let start = (taken + step) * WIDE_GROUPS;
                     bad = vorrq_u8(
                         bad,
-                        decode_wide(
-                            &tables,
-                            source.add(start * 4),
-                            destination.add(start * 3),
-                        ),
+                        decode_wide(&tables, source.add(start * 4), destination.add(start * 3)),
                     );
                 }
                 if vmaxvq_u8(bad) != 0 {
@@ -355,11 +357,7 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
                 let start = (taken + step) * WIDE_GROUPS;
                 bad = vorrq_u8(
                     bad,
-                    decode_wide(
-                        &tables,
-                        source.add(start * 4),
-                        destination.add(start * 3),
-                    ),
+                    decode_wide(&tables, source.add(start * 4), destination.add(start * 3)),
                 );
             }
             if has_tail {
@@ -415,7 +413,21 @@ unsafe fn decode_short(tables: &Tables, source: *const u8, destination: *mut u8)
         let odd_char = tables.odd_char;
         let odd_value = tables.odd_value;
         let mut bad = vdupq_n_u8(0);
-        let values = values_of!(vld1q_u8(source), bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value);
+        let values = values_of!(
+            vld1q_u8(source),
+            bad,
+            tables,
+            vshrq_n_u8,
+            vandq_u8,
+            vorrq_u8,
+            vqtbl1q_u8,
+            vaddq_u8,
+            vceqq_u8,
+            vbslq_u8,
+            low_four,
+            odd_char,
+            odd_value
+        );
 
         // Sliding the outer pair up and the inner pair down puts the group's 24
         // bits in a row, most significant first.
@@ -454,10 +466,22 @@ unsafe fn decode_wide(tables: &Tables, source: *const u8, destination: *mut u8) 
         let quad = vld4q_u8(source);
         let mut bad = vdupq_n_u8(0);
         let fields = (
-            values_of!(quad.0, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value),
-            values_of!(quad.1, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value),
-            values_of!(quad.2, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value),
-            values_of!(quad.3, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value),
+            values_of!(
+                quad.0, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8,
+                vceqq_u8, vbslq_u8, low_four, odd_char, odd_value
+            ),
+            values_of!(
+                quad.1, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8,
+                vceqq_u8, vbslq_u8, low_four, odd_char, odd_value
+            ),
+            values_of!(
+                quad.2, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8,
+                vceqq_u8, vbslq_u8, low_four, odd_char, odd_value
+            ),
+            values_of!(
+                quad.3, bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8,
+                vceqq_u8, vbslq_u8, low_four, odd_char, odd_value
+            ),
         );
         let (first, second, third) = merge_bits!(fields, vshrq_n_u8, vsliq_n_u8);
         vst3q_u8(destination, uint8x16x3_t(first, second, third));
@@ -479,8 +503,36 @@ unsafe fn decode_narrow(tables: &Tables, source: *const u8, destination: *mut u8
         let odd_value = tables.odd_value;
         let quad = vld4_u8(source);
         let mut bad = vdupq_n_u8(0);
-        let front = values_of!(vcombine_u8(quad.0, quad.1), bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value);
-        let back = values_of!(vcombine_u8(quad.2, quad.3), bad, tables, vshrq_n_u8, vandq_u8, vorrq_u8, vqtbl1q_u8, vaddq_u8, vceqq_u8, vbslq_u8, low_four, odd_char, odd_value);
+        let front = values_of!(
+            vcombine_u8(quad.0, quad.1),
+            bad,
+            tables,
+            vshrq_n_u8,
+            vandq_u8,
+            vorrq_u8,
+            vqtbl1q_u8,
+            vaddq_u8,
+            vceqq_u8,
+            vbslq_u8,
+            low_four,
+            odd_char,
+            odd_value
+        );
+        let back = values_of!(
+            vcombine_u8(quad.2, quad.3),
+            bad,
+            tables,
+            vshrq_n_u8,
+            vandq_u8,
+            vorrq_u8,
+            vqtbl1q_u8,
+            vaddq_u8,
+            vceqq_u8,
+            vbslq_u8,
+            low_four,
+            odd_char,
+            odd_value
+        );
         let fields = (
             vget_low_u8(front),
             vget_high_u8(front),

@@ -150,7 +150,10 @@ mod tests {
             let spelled = encode_block::<A>(&input);
             let mut expected = [0u8; 64];
             crate::scalar::encode_bulk::<A>(&input, &mut expected, 16);
-            assert_eq!(spelled, expected, "the expansion or the field starts are wrong");
+            assert_eq!(
+                spelled, expected,
+                "the expansion or the field starts are wrong"
+            );
 
             let (bytes, has_outsider) = decode_block::<A>(&spelled);
             assert!(!has_outsider, "its own characters were called invalid");

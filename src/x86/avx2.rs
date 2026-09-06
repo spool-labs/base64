@@ -138,12 +138,22 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet, const STREAM: bool>(
             done += BLOCK_IN / 3;
         }
         while groups - done >= HALF_IN / 3 {
-            encode_half(&narrow, split_low, source.add(done * 3), destination.add(done * 4));
+            encode_half(
+                &narrow,
+                split_low,
+                source.add(done * 3),
+                destination.add(done * 4),
+            );
             done += HALF_IN / 3;
         }
         if done < groups {
             let start = groups - HALF_IN / 3;
-            encode_half(&narrow, split_low, source.add(start * 3), destination.add(start * 4));
+            encode_half(
+                &narrow,
+                split_low,
+                source.add(start * 3),
+                destination.add(start * 4),
+            );
         }
         if STREAM {
             // A streaming store is not ordered against the caller's later reads.
@@ -421,14 +431,16 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
         // cutting them apart. The block behind overwrites the 4 it ran over,
         // so only a block that has one may take this form.
         while quads - done >= 16 {
-            let found = decode_block::<true>(&tables, source.add(done * 4), destination.add(done * 3));
+            let found =
+                decode_block::<true>(&tables, source.add(done * 4), destination.add(done * 3));
             if _mm256_testz_si256(found, found) == 0 {
                 return done;
             }
             done += 8;
         }
         while quads - done >= 8 {
-            let found = decode_block::<false>(&tables, source.add(done * 4), destination.add(done * 3));
+            let found =
+                decode_block::<false>(&tables, source.add(done * 4), destination.add(done * 3));
             if _mm256_testz_si256(found, found) == 0 {
                 return done;
             }
@@ -502,7 +514,10 @@ macro_rules! values_of {
         let chars = $chars;
         let high_nibble = $and($srli(chars, 4), $set32(0x0f0f_0f0f));
         let low_nibble = $and(chars, $set32(0x0f0f_0f0f));
-        $bad = $or($bad, $and($shuffle($high, high_nibble), $shuffle($low, low_nibble)));
+        $bad = $or(
+            $bad,
+            $and($shuffle($high, high_nibble), $shuffle($low, low_nibble)),
+        );
         let rolled = $add(chars, $shuffle($roll, high_nibble));
         $blend(rolled, $set8(ODD_VALUE as i8), $cmpeq(chars, $odd))
     }};
@@ -567,7 +582,10 @@ unsafe fn decode_block<const SPARE: bool>(
             _mm_storeu_si128(destination.cast(), low);
             _mm_storeu_si128(destination.add(12).cast(), high);
         } else {
-            _mm_storeu_si128(destination.cast(), _mm_or_si128(low, _mm_slli_si128(high, 12)));
+            _mm_storeu_si128(
+                destination.cast(),
+                _mm_or_si128(low, _mm_slli_si128(high, 12)),
+            );
             _mm_storel_epi64(destination.add(16).cast(), _mm_srli_si128(high, 4));
         }
         bad
@@ -611,7 +629,8 @@ unsafe fn decode_half(tables: &Tables, source: *const u8, destination: *mut u8) 
             tables.narrow_pack
         );
         _mm_storel_epi64(destination.cast(), packed);
-        destination.add(8)
+        destination
+            .add(8)
             .cast::<u32>()
             .write_unaligned(_mm_extract_epi32(packed, 2) as u32);
         bad

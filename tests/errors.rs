@@ -41,7 +41,9 @@ fn lengths_no_encoder_produces() {
     let all_a = [b'A'; 256];
     for length in [1usize, 5, 65, 129] {
         assert_eq!(
-            STANDARD_NO_PAD.decode(&all_a[..length], &mut out).unwrap_err(),
+            STANDARD_NO_PAD
+                .decode(&all_a[..length], &mut out)
+                .unwrap_err(),
             DecodeError::InvalidLength { length }
         );
     }

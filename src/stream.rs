@@ -233,7 +233,7 @@ impl Decoder {
                 }
                 Ok(0)
             }
-            State::Ended { at, pad } if self.total == at => {
+            State::Ended { at, .. } if self.total == at => {
                 // An ending is still the wrong length when its groups were short.
                 self.check_length()?;
                 match self.pending.take() {
@@ -317,19 +317,30 @@ impl Decoder {
         // A run holding padding is refused whole and handed back, so a piece
         // that ends in padding keeps its last group for the character loop,
         // which is what weighs padding anyway.
-        let ending = if self.is_padded && input.last() == Some(&b'=') { 4 } else { 0 };
+        let ending = if self.is_padded && input.last() == Some(&b'=') {
+            4
+        } else {
+            0
+        };
         let whole = (input.len() - consumed).saturating_sub(ending) / 4;
         if whole > 0 {
             let base = self.total;
             let began = consumed;
-            let (bytes, failure) =
-                codec::scan_quads::<A>(&input[consumed..consumed + whole * 4], &mut out[written..], whole);
+            let (bytes, failure) = codec::scan_quads::<A>(
+                &input[consumed..consumed + whole * 4],
+                &mut out[written..],
+                whole,
+            );
             written += bytes;
             let taken = bytes / 3 * 4;
             consumed += taken;
             self.total += taken;
 
-            if let Some(DecodeError::InvalidByte { position: local, byte }) = failure {
+            if let Some(DecodeError::InvalidByte {
+                position: local,
+                byte,
+            }) = failure
+            {
                 if !self.is_padded || byte != b'=' {
                     self.total += local + 1 - taken;
                     let cause = DecodeError::InvalidByte {
@@ -429,7 +440,10 @@ impl Decoder {
             A::DECODE[quad[2] as usize],
             A::DECODE[quad[3] as usize],
         ];
-        if let Some(place) = values.iter().position(|&value| value == crate::alphabet::INVALID) {
+        if let Some(place) = values
+            .iter()
+            .position(|&value| value == crate::alphabet::INVALID)
+        {
             return Err(DecodeError::InvalidByte {
                 position: base + place,
                 byte: quad[place],
@@ -532,9 +546,7 @@ impl Decoder {
         if valid {
             Ok(())
         } else {
-            Err(DecodeError::InvalidLength {
-                length: self.total,
-            })
+            Err(DecodeError::InvalidLength { length: self.total })
         }
     }
 }

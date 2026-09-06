@@ -6,8 +6,8 @@ mod avx2;
 mod avx512;
 mod dispatch;
 
-pub use dispatch::{available, force, force_stream_floor, AVX2, PORTABLE, UNKNOWN, WIDE};
 pub(crate) use dispatch::Path;
+pub use dispatch::{available, force, force_stream_floor, AVX2, PORTABLE, UNKNOWN, WIDE};
 
 /// Below this no cache is small enough for streaming to be the right answer,
 /// so a short buffer settles the question with one compare

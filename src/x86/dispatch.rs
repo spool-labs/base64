@@ -85,7 +85,7 @@ pub fn available() -> u8 {
         let has_vbmi = leaf_seven.ebx & (1 << 16) != 0     // avx512f
             && leaf_seven.ebx & (1 << 30) != 0             // avx512bw
             && leaf_seven.ecx & (1 << 1) != 0; // avx512vbmi
-        // AVX-512 without VBMI has to decline rather than fault on `vpermb`.
+                                               // AVX-512 without VBMI has to decline rather than fault on `vpermb`.
         if has_zmm_state && has_vbmi && cfg!(feature = "avx512") {
             WIDE
         } else {
@@ -121,6 +121,8 @@ pub(crate) fn stream_floor() -> usize {
 }
 
 /// Bytes in the last level cache, or nothing if the processor will not say
+// `cpuid` became a safe call after the msrv, where the block is still needed.
+#[allow(unused_unsafe)]
 fn last_level_bytes() -> Option<usize> {
     // SAFETY: leaf 0 and leaf 0x80000000 each say how far their range goes,
     // and neither descriptor leaf is read before its range covers it.
