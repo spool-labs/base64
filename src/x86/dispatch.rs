@@ -97,6 +97,14 @@ pub fn available() -> u8 {
 /// Not yet asked
 const UNMEASURED: usize = 0;
 
+/// The range a last level cache descriptor has to land in to be believed
+///
+/// Three sevenths of the smallest is 27 KiB, so a floor that was measured is
+/// never `UNMEASURED` and the two answers cannot be confused.
+const SMALLEST_CACHE: usize = 1 << 16;
+const LARGEST_CACHE: usize = 1 << 31;
+const _: () = assert!(SMALLEST_CACHE / 7 * 3 > UNMEASURED);
+
 static FLOOR: AtomicUsize = AtomicUsize::new(UNMEASURED);
 
 /// The input length past which an encode should stop keeping its output
@@ -104,7 +112,8 @@ static FLOOR: AtomicUsize = AtomicUsize::new(UNMEASURED);
 /// An encode touches its input and an output a third larger again, so the pair
 /// leaves the last level cache at about three sevenths of it. Past that,
 /// writing through the cache only evicts what the next block is about to read.
-/// A processor that will not say how big its cache is gets `usize::MAX`, which
+/// A processor that will not say how big its cache is, or that answers with a
+/// size outside `SMALLEST_CACHE..=LARGEST_CACHE`, gets `usize::MAX`, which
 /// never fires.
 pub(crate) fn stream_floor() -> usize {
     match FLOOR.load(Ordering::Relaxed) {
@@ -146,14 +155,27 @@ fn last_level_bytes() -> Option<usize> {
             if (cache.eax >> 5) & 0x7 < 3 {
                 continue;
             }
-            let ways = ((cache.ebx >> 22) & 0x3ff) as usize + 1;
-            let partitions = ((cache.ebx >> 12) & 0x3ff) as usize + 1;
-            let line = (cache.ebx & 0xfff) as usize + 1;
-            let sets = cache.ecx as usize + 1;
-            largest = largest.max(ways * partitions * line * sets);
+            if let Some(bytes) = cache_bytes(cache.ebx, cache.ecx) {
+                largest = largest.max(bytes);
+            }
         }
         (largest > 0).then_some(largest)
     }
+}
+
+/// Bytes a cache descriptor stands for, or nothing where it is not believable
+///
+/// Four fields nothing has validated, whose product reaches 2^64 if a
+/// hypervisor answers a leaf it does not implement with all ones.
+fn cache_bytes(ebx: u32, ecx: u32) -> Option<usize> {
+    let ways = ((ebx >> 22) & 0x3ff) as usize + 1;
+    let partitions = ((ebx >> 12) & 0x3ff) as usize + 1;
+    let line = (ebx & 0xfff) as usize + 1;
+    let sets = ecx as usize + 1;
+    ways.checked_mul(partitions)
+        .and_then(|size| size.checked_mul(line))
+        .and_then(|size| size.checked_mul(sets))
+        .filter(|size| (SMALLEST_CACHE..=LARGEST_CACHE).contains(size))
 }
 
 /// Pin the streaming floor, for a test that wants to reach it without
@@ -172,4 +194,32 @@ pub fn force_stream_floor(bytes: usize) {
 /// `PORTABLE` means no wider than what `available` reports.
 pub unsafe fn force(chosen: u8) {
     CHOSEN.store(chosen, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // a descriptor of all ones is refused rather than multiplied out
+    #[test]
+    fn absurd_geometry_is_refused() {
+        assert_eq!(cache_bytes(u32::MAX, u32::MAX), None);
+        assert_eq!(cache_bytes(0, 0), None);
+        assert_eq!(cache_bytes(u32::MAX, 0), None);
+    }
+
+    // 16 ways, one partition, 64 byte lines, 32768 sets: a 32 MiB last level
+    #[test]
+    fn a_real_descriptor_measures_its_cache() {
+        assert_eq!(cache_bytes((15 << 22) | 63, 32_767), Some(32 << 20));
+    }
+
+    // a believable cache leaves a floor nothing mistakes for `UNMEASURED`
+    #[test]
+    fn a_measured_floor_is_not_the_sentinel() {
+        assert_ne!(
+            cache_bytes((15 << 22) | 63, 32_767).unwrap() / 7 * 3,
+            UNMEASURED
+        );
+    }
 }
