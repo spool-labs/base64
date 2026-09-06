@@ -10,7 +10,7 @@
 //! parallel, so every test here holds `PIN` for as long as it has a path
 //! pinned.
 
-#![cfg(target_arch = "x86_64")]
+#![cfg(all(target_arch = "x86_64", feature = "internals"))]
 
 mod common;
 

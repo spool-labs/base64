@@ -22,7 +22,7 @@ base64 = "0.23"
 base64-simd = "0.8"
 base64-turbo = "0.3"
 criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
-tape-base64 = { path = ".." }
+tape-base64 = { path = "..", features = ["internals"] }
 
 [[bench]]
 name = "against"

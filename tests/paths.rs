@@ -1,5 +1,7 @@
 //! The vector stage and the portable walk have to agree, byte for byte
 
+#![cfg(feature = "internals")]
+
 mod common;
 
 use common::Rng;

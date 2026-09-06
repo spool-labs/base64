@@ -7,6 +7,8 @@ mod avx512;
 mod dispatch;
 
 pub(crate) use dispatch::Path;
+
+#[cfg(feature = "internals")]
 pub use dispatch::{available, force, force_stream_floor, AVX2, PORTABLE, UNKNOWN, WIDE};
 
 /// Below this no cache is small enough for streaming to be the right answer,

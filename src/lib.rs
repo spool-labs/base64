@@ -215,6 +215,10 @@ pub const fn encoded_len(len: usize) -> Option<usize> {
 }
 
 /// Internals the test suite checks and the benchmarks time, not a public API
+///
+/// Behind the `internals` feature, because pinning the path or the streaming
+/// floor is a property of the whole process rather than of one caller.
+#[cfg(feature = "internals")]
 #[doc(hidden)]
 pub mod testing {
     use crate::alphabet::{Standard, UrlSafe};
@@ -226,11 +230,24 @@ pub mod testing {
     use crate::x86;
 
     pub fn portable_encode(input: &[u8], out: &mut [u8], is_padded: bool) {
+        let codec = if is_padded {
+            crate::STANDARD
+        } else {
+            crate::STANDARD_NO_PAD
+        };
+        assert!(
+            out.len() >= codec.encoded_len(input.len()).expect("a length this small"),
+            "the walk wants room for the whole encoding"
+        );
         let groups = scalar::encode_bulk::<Standard>(input, out, input.len() / 3);
         scalar::encode_rest::<Standard>(&input[groups * 3..], &mut out[groups * 4..], is_padded);
     }
 
     pub fn portable_decode(input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
+        assert!(
+            out.len() >= crate::decoded_len(input.len()),
+            "the walk wants room for the whole decoding"
+        );
         let quads = scalar::decode_bulk::<Standard>(input, out, input.len() / 4);
         let (read, written) = (quads * 4, quads * 3);
         if input.len() - read >= 4 {

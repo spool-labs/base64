@@ -182,6 +182,7 @@ fn cache_bytes(ebx: u32, ecx: u32) -> Option<usize> {
 /// converting as much as this machine's cache holds
 ///
 /// Zero puts it back to whatever the processor says.
+#[cfg(feature = "internals")]
 pub fn force_stream_floor(bytes: usize) {
     FLOOR.store(bytes, Ordering::Relaxed);
 }
@@ -192,6 +193,7 @@ pub fn force_stream_floor(bytes: usize) {
 ///
 /// The path must be one the running processor can execute, which past
 /// `PORTABLE` means no wider than what `available` reports.
+#[cfg(feature = "internals")]
 pub unsafe fn force(chosen: u8) {
     CHOSEN.store(chosen, Ordering::Relaxed);
 }

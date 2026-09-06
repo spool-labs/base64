@@ -28,6 +28,7 @@ jobs:
       - run: cargo clippy --all-targets
       - run: cargo clippy --all-targets --no-default-features
       - run: cargo clippy --all-targets --features std
+      - run: cargo clippy --all-targets --features internals
 
   test:
     name: test (${{ matrix.arch }})
@@ -50,8 +51,13 @@ jobs:
       # only shows up once the optimiser has been through the kernels.
       - run: cargo test
       - run: cargo test --release
+      # The tests that pin a path reach for `testing`, which is behind the
+      # `internals` feature, so without it they compile to nothing.
+      - run: cargo test --features internals
+      - run: cargo test --release --features internals
       # Dispatch stops at AVX2 without the feature, which is its own set of paths.
       - run: cargo test --no-default-features
+      - run: cargo test --no-default-features --features internals
       # The benchmarks are a separate workspace and break silently when the
       # library's signatures move, so they are typechecked here.
       - run: cargo check --benches
