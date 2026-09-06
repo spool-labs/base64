@@ -5,14 +5,13 @@
 
 use core::arch::aarch64::{
     uint8x16_t, uint8x16x3_t, uint8x16x4_t, uint8x8_t, uint8x8x3_t, uint8x8x4_t, vaddq_u8, vand_u8,
-    vandq_u32, vandq_u8, vbslq_u8, vceqq_u8, vcombine_u8, vdup_n_u8, vdupq_n_u32, vdupq_n_u8,
-    vget_high_u8, vget_low_u8, vgetq_lane_u32, vld1_dup_u32, vld1_u8, vld1q_u8, vld1q_u8_x4,
-    vld3_u8, vld3q_u8, vld4_u8, vld4q_u8, vmaxvq_u8, vmulq_u16, vorr_u8, vorrq_u16, vorrq_u32,
-    vorrq_u8, vqtbl1q_u8, vqtbl4q_u8, vreinterpret_u8_u32, vreinterpretq_u16_u32,
-    vreinterpretq_u16_u8, vreinterpretq_u32_u16, vreinterpretq_u32_u8, vreinterpretq_u8_u16,
-    vreinterpretq_u8_u32, vshl_n_u8, vshlq_n_u32, vshlq_n_u8, vshr_n_u8, vshrq_n_u16, vshrq_n_u32,
-    vshrq_n_u8, vsli_n_u8, vsliq_n_u8, vsri_n_u8, vsriq_n_u8, vst1_u8, vst1q_u8, vst3_u8, vst3q_u8,
-    vst4_u8, vst4q_u8,
+    vandq_u32, vandq_u8, vbslq_u8, vceqq_u8, vcombine_u8, vdup_n_u32, vdup_n_u8, vdupq_n_u32,
+    vdupq_n_u8, vget_high_u8, vget_low_u8, vgetq_lane_u32, vld1_u8, vld1q_u8, vld1q_u8_x4, vld3_u8,
+    vld3q_u8, vld4_u8, vld4q_u8, vmaxvq_u8, vmulq_u16, vorr_u8, vorrq_u16, vorrq_u32, vorrq_u8,
+    vqtbl1q_u8, vqtbl4q_u8, vreinterpret_u8_u32, vreinterpretq_u16_u32, vreinterpretq_u16_u8,
+    vreinterpretq_u32_u16, vreinterpretq_u32_u8, vreinterpretq_u8_u16, vreinterpretq_u8_u32,
+    vshl_n_u8, vshlq_n_u32, vshlq_n_u8, vshr_n_u8, vshrq_n_u16, vshrq_n_u32, vshrq_n_u8, vsli_n_u8,
+    vsliq_n_u8, vsri_n_u8, vsriq_n_u8, vst1_u8, vst1q_u8, vst3_u8, vst3q_u8, vst4_u8, vst4q_u8,
 };
 
 use crate::alphabet::{Alphabet, ODD_VALUE};
@@ -263,7 +262,9 @@ unsafe fn encode_short(table: &uint8x16x4_t, source: *const u8, destination: *mu
     // SAFETY: loads of 8 and 4 cover the 12 promised, and the store writes 16.
     unsafe {
         let front = vld1_u8(source);
-        let back = vreinterpret_u8_u32(vld1_dup_u32(source.add(8).cast()));
+        // Read as a value rather than through `vld1_dup_u32`, whose pointer is
+        // a `*const u32` the source is under no obligation to be aligned for.
+        let back = vreinterpret_u8_u32(vdup_n_u32(source.add(8).cast::<u32>().read_unaligned()));
         let gathered = vqtbl1q_u8(vcombine_u8(front, back), vld1q_u8(GATHER.as_ptr()));
 
         // Every field is a run of 6 bits inside one 16-bit half of a lane, so a

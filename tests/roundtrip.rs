@@ -122,3 +122,25 @@ fn writes_only_what_it_returns() {
     assert_eq!(back, 5);
     assert!(decoded[back..].iter().all(|&byte| byte == 0xCC));
 }
+
+/// A source that does not start on a word boundary
+///
+/// The aarch64 short block reads the last 4 of its 12 bytes at `source + 8`,
+/// which is a word address only when the source is one, so an offset input
+/// whose tail lands in that block is the case a word-aligned load would get
+/// wrong.
+#[test]
+fn sources_at_every_offset() {
+    #[repr(align(16))]
+    struct Aligned([u8; 160]);
+
+    let mut room = Aligned([0u8; 160]);
+    Rng::new(0xA11B_0FF5).fill(&mut room.0);
+    for offset in 0..8 {
+        for len in 0..=96 {
+            for (name, codec) in CODECS {
+                roundtrip(codec, name, &room.0[offset..offset + len]);
+            }
+        }
+    }
+}
