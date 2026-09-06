@@ -154,6 +154,18 @@ pub struct Decoder {
     state: State,
 }
 
+/// Refuse a buffer short of the bytes a held group of `chars` characters owes
+///
+/// Two characters carry one byte and three carry two, which is what a
+/// whole-input decode asks for before it reads anything.
+fn room_for(chars: usize, out: &[u8]) -> Result<(), DecodeError> {
+    let needed = chars.saturating_sub(1);
+    if out.len() < needed {
+        return Err(DecodeError::BufferTooSmall { needed });
+    }
+    Ok(())
+}
+
 /// A group that may be an ending
 struct Pending {
     /// The characters before the padding
@@ -215,6 +227,11 @@ impl Decoder {
         match core::mem::replace(&mut self.state, State::Reading) {
             State::Reading => {
                 self.check_length()?;
+                let owed = match &self.pending {
+                    Some(pending) => usize::from(pending.group_len),
+                    None => held,
+                };
+                room_for(owed, out)?;
                 // A group held over with padding aboard is the ending the
                 // input stopped on, which nothing has judged until now.
                 if let Some(pending) = self.pending.take() {
@@ -236,6 +253,11 @@ impl Decoder {
             State::Ended { at, .. } if self.total == at => {
                 // An ending is still the wrong length when its groups were short.
                 self.check_length()?;
+                let owed = self
+                    .pending
+                    .as_ref()
+                    .map_or(0, |pending| usize::from(pending.group_len));
+                room_for(owed, out)?;
                 match self.pending.take() {
                     // The ending stood, and its characters become bytes here.
                     Some(pending) => self.settle(pending, out),

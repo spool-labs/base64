@@ -261,6 +261,48 @@ fn short_decode_buffer() {
     assert_eq!(decoder.finish(&mut spot).unwrap(), 1);
 }
 
+// a finish with no room for the ending refuses the way one whole call does
+#[test]
+fn short_finish_buffer() {
+    let mut decoder = tape_base64::STANDARD.decoder();
+    assert_eq!(decoder.push(b"QQ==", &mut [0u8; 8]).unwrap(), 0);
+    assert_eq!(
+        decoder.finish(&mut []),
+        Err(DecodeError::BufferTooSmall { needed: 1 })
+    );
+    assert_eq!(
+        tape_base64::STANDARD.decode(b"QQ==", &mut []),
+        Err(DecodeError::BufferTooSmall { needed: 1 })
+    );
+}
+
+// an ending carrying bits the output cannot hold is refused at `finish`, not
+// dropped by a buffer too short to have written it
+#[test]
+fn finish_judges_the_last_symbol() {
+    let codec = tape_base64::STANDARD_NO_PAD;
+    let refusal = DecodeError::InvalidLastSymbol {
+        position: 2,
+        byte: b'B',
+    };
+
+    let mut decoder = codec.decoder();
+    assert_eq!(decoder.push(b"AAB", &mut [0u8; 8]).unwrap(), 0);
+    assert_eq!(
+        decoder.finish(&mut [0u8; 1]),
+        Err(DecodeError::BufferTooSmall { needed: 2 })
+    );
+    assert_eq!(
+        codec.decode(b"AAB", &mut [0u8; 1]),
+        Err(DecodeError::BufferTooSmall { needed: 2 })
+    );
+
+    let mut decoder = codec.decoder();
+    assert_eq!(decoder.push(b"AAB", &mut [0u8; 8]).unwrap(), 0);
+    assert_eq!(decoder.finish(&mut [0u8; 2]), Err(refusal));
+    assert_eq!(codec.decode(b"AAB", &mut [0u8; 2]), Err(refusal));
+}
+
 // an ending followed by more input refuses at the end, wherever that is learned
 #[test]
 fn ending_then_more() {
