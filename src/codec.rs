@@ -8,8 +8,10 @@ use crate::scalar;
 /// Write the encoding of `input` into `out`, which is exactly long enough
 pub(crate) fn encode<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usize, is_padded: bool) {
     let written = encode_groups::<A>(input, out, groups);
-    let read = written / 4 * 3;
-    scalar::encode_rest::<A>(&input[read..], &mut out[written..], is_padded);
+    // Where the tail goes was settled before the stages ran, and saying so
+    // rather than dividing the count back down leaves the two independent.
+    debug_assert_eq!(written, groups * 4);
+    scalar::encode_rest::<A>(&input[groups * 3..], &mut out[groups * 4..], is_padded);
 }
 
 /// Convert `groups` whole groups, returning how many characters were written
@@ -34,8 +36,11 @@ pub(crate) fn decode<A: Alphabet>(
     quads: usize,
 ) -> Result<usize, DecodeError> {
     let written = decode_quads::<A>(input, out, quads)?;
-    let read = written / 3 * 4;
-    Ok(written + scalar::decode_rest::<A>(&input[read..], &mut out[written..], written / 3 * 4)?)
+    // Every group converted, or the call above would have refused, so the tail
+    // sits where the caller's own count put it.
+    debug_assert_eq!(written, quads * 3);
+    let read = quads * 4;
+    Ok(written + scalar::decode_rest::<A>(&input[read..], &mut out[quads * 3..], read)?)
 }
 
 /// Convert `quads` whole groups, refusing any that holds a foreign character

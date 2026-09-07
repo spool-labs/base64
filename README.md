@@ -235,15 +235,6 @@ Daniel Lemire's work on vectorised base64. The aarch64 block structure,
 that reaches its two right shifts through a low multiply and one shared
 shift rather than a high multiply.
 
-Two things here came from reading `base64-turbo`. That LLVM rewrites that
-multiply into shifts and a blend, and that it has to be kept from doing so, is
-theirs. So is the decode store, two 16-byte writes that overlap rather than
-one cut apart, though this crate takes that form only where a later block will
-overwrite what it ran past, so nothing is written beyond what is returned. The
-way the multiply is kept differs: naming the instruction rather than making
-the constant opaque, which holds the multiply without making every short call
-pay to materialize a constant it barely uses.
-
 All of these are widely reimplemented. This is an independent
 implementation of the same ideas: the block sizes and how a remainder is
 covered, the overlapping tail, the exact bounds, and the error handling were

@@ -129,6 +129,20 @@ Median of five runs, 2026-08-22.
 | 65536 | 12.75 | 7.94 | 7.43 | 7.10 | 3.85 | 3.70 | **1.61x** |
 | 1048576 | 12.66 | 7.93 | 7.34 | 6.98 | 3.90 | 3.72 | **1.60x** |
 
+### The tail, M4
+
+`cargo bench --bench tail`, ns per call, 2026-09-07, two interleaved rounds
+each way. The tail writer used to divide the kernel's return value back into
+an input offset, which made it wait on that value; indexing both slices from
+the caller's group count instead lets the writer start beside the kernel.
+
+| bytes | encode before | encode after | decode before | decode after |
+|---|---|---|---|---|
+| 24 | 3.30 | 3.08 | 3.58 | 3.51 |
+| 32 | 4.76 | 4.51 | 4.66 | 4.59 |
+| 48 | 3.82 | 3.64 | 4.76 | 4.53 |
+| 64 | 5.29 | 5.06 | 6.85 | 6.38 |
+
 ## AMD EPYC Milan, AVX2
 
 Both this crate and `base64-turbo` run AVX2 here, because the machine has no
