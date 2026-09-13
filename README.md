@@ -94,6 +94,16 @@ valgrind --error-exitcode=9 --quiet target/release/deps/forced-*
 
 The aarch64 kernel cannot run under Miri, which has no `vqtbl4q_u8`.
 
+`fuzz/` holds three cargo-fuzz targets, `decode`, `roundtrip` and `streaming`,
+each against the reference crate:
+
+```sh
+cd fuzz && cargo +nightly fuzz run decode
+```
+
+CI runs the test suite on x86-64 and aarch64, Miri over the x86 kernels,
+valgrind on both architectures, and a minute of each fuzz target.
+
 ## Features
 
 | feature | what it does |

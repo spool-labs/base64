@@ -73,6 +73,73 @@ jobs:
       # No vector units and no std, which is the arm neither runner reaches.
       - run: cargo build --lib --target thumbv6m-none-eabi
 
+  miri:
+    name: miri (x86 kernels)
+    runs-on: ubuntu-latest
+    env:
+      # Miri has no cpuid, so the target features stand in for it and the forced
+      # test pins the portable walk, AVX2 and AVX-512VBMI in turn.
+      RUSTFLAGS: -C target-feature=+avx512f,+avx512bw,+avx512vbmi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo miri test --target x86_64-unknown-linux-gnu --features internals --test forced
+
+  valgrind:
+    name: valgrind (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86-64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      # An over-read still gives the right answer, so only valgrind sees it. Its
+      # cpuid hides AVX-512, so the wide kernel is Miri's to check.
+      - run: cargo test --release --features internals --test forced --no-run
+      - run: |
+          for bin in target/release/deps/forced-*; do
+            case "$bin" in *.d) continue ;; esac
+            valgrind --error-exitcode=9 --quiet "$bin"
+          done
+
+  fuzz:
+    name: fuzz
+    runs-on: ubuntu-latest
+    # Nightly has lints the pinned toolchains do not, and a fuzz run is not the
+    # place to find out about them.
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      # A smoke run, not a campaign. Long runs belong on a box, not on a pull request.
+      - run: cargo fuzz run --target x86_64-unknown-linux-gnu decode -- -max_total_time=60
+      - run: cargo fuzz run --target x86_64-unknown-linux-gnu roundtrip -- -max_total_time=60
+      - run: cargo fuzz run --target x86_64-unknown-linux-gnu streaming -- -max_total_time=60
+
   msrv:
     name: msrv
     runs-on: ubuntu-latest

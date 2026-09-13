@@ -81,7 +81,7 @@ fn random_bytes_convert_like_the_reference() {
 
 /// An encoding with a few characters changed is read, or refused, alike
 #[test]
-fn random_corruptions_are_judged_like_the_reference() {
+fn random_corruptions_are_read_like_the_reference() {
     for seed in [0xA409_3822u64, 0x299F_31D0, 0x082E_FA98, 0xEC4E_6C89] {
         let mut rng = Rng::new(seed);
         let mut source = vec![0u8; 600];
@@ -113,7 +113,7 @@ fn random_corruptions_are_judged_like_the_reference() {
 
 /// Characters drawn out of a pool that is mostly, but not only, an alphabet
 #[test]
-fn random_character_soup_is_judged_like_the_reference() {
+fn random_character_soup_is_read_like_the_reference() {
     for seed in [0x4528_21E6u64, 0x38D0_1377, 0xBE54_66CF, 0x34E9_0C6C] {
         let mut rng = Rng::new(seed);
         let mut encoded = [0u8; 160];
@@ -132,7 +132,7 @@ fn random_character_soup_is_judged_like_the_reference() {
 
 /// An encoding cut and joined at random offsets, leaving padding in the middle
 #[test]
-fn random_splices_are_judged_like_the_reference() {
+fn random_splices_are_read_like_the_reference() {
     for seed in [0xC0AC_29B7u64, 0xC97C_50DD, 0x3F84_D5B5, 0xB547_0917] {
         let mut rng = Rng::new(seed);
         let mut source = vec![0u8; 200];
