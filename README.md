@@ -29,30 +29,22 @@ push short of room refuses the whole piece rather than part of it.
 
 ## How it is fast
 
-A group is 3 bytes, which no register width divides. On aarch64, `ld3` reads
-48 bytes as three registers holding the first, second and third byte of every
-group, four shifts and inserts split the six-bit fields, one `tbl` over all 64
-characters spells them, and `st4` writes them back interleaved. Decoding runs
-the other way through `ld4` and `st3`, classifying each character by its two
-nibbles. 48 bytes a block, and nothing shuffled into place.
+A group is 3 bytes, which no register width divides, so each kernel is
+written for the shape of its own registers.
 
-On x86, AVX2 gathers 3 bytes into each 32-bit lane and splits the fields with
-a pair of multiplies. AVX-512 with VBMI does it in three instructions: `vpermb`
-indexes all 64 characters at once and `vpmultishiftqb` pulls every six-bit
-field out of a lane, with masked loads and stores covering the last partial
-block. Which x86 path runs is asked of the processor at first use, not fixed
-when the crate is built.
-On wasm32 built with `-C target-feature=+simd128`, the same form runs on one
-16-byte register through `i8x16.swizzle`.
+| | a block |
+|---|---|
+| aarch64 | `ld3` reads 48 bytes as the first, second and third byte of 16 groups, shifts split the fields, one `tbl` over all 64 characters spells them, `st4` writes them back interleaved |
+| x86-64 AVX2 | 3 bytes gathered into each 32-bit lane, fields split by a pair of multiplies, alphabet through a 16-entry offset table |
+| x86-64 AVX-512VBMI | `vpermb` indexes all 64 characters at once, `vpmultishiftqb` pulls every field out of a lane, masked loads and stores cover the last partial block |
+| wasm32 simd128 | the AVX2 form on one 16-byte register, lookups through `i8x16.swizzle` |
+| anything else | portable, two groups per wide load |
 
-A block that would run past the end is moved back to end where the groups end,
-converting a few groups twice, so the portable walk is left only the one or two
-bytes short of a group. The aarch64 kernels touch exactly what they convert.
-The x86 encoder reads 4 bytes before a block only where both sides have the
-room, and the x86 decoder lands 24 bytes as two overlapping 16-byte stores only
-where the next block overwrites the overhang, so nothing is written past what a
-call returns. Above the size where input and output stop fitting in the last
-level cache, read from cpuid, the x86 encoder streams its stores past the cache.
+Decoding runs the same way backwards, classifying each character by its two
+nibbles. Which x86 path runs is asked of the processor at first use. Every
+kernel reads and writes exactly what it converts, except where the x86 ones
+overlap a block a later block overwrites, so nothing lands past what a call
+returns.
 
 ## Benchmarks
 
