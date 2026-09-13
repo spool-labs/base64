@@ -311,7 +311,7 @@ fn short_finish_buffer() {
 
 // an ending with bits the output cannot hold is refused at `finish`
 #[test]
-fn finish_judges_the_last_symbol() {
+fn finish_checks_the_last_symbol() {
     let codec = tape_base64::STANDARD_NO_PAD;
     let refusal = DecodeError::InvalidLastSymbol {
         position: 2,

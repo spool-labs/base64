@@ -109,11 +109,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y valgrind
       # An over-read still gives the right answer, so only valgrind sees it. Its
-      # cpuid hides AVX-512, so the wide kernel is Miri's to check.
-      - run: cargo test --release --features internals --test forced --no-run
+      # cpuid hides AVX-512, so the wide kernel is Miri's to check. forced pins
+      # each x86 path and is empty on aarch64, where lengths runs the NEON kernel.
       - run: |
-          for bin in target/release/deps/forced-*; do
-            case "$bin" in *.d) continue ;; esac
+          bins=$(cargo test --release --features internals --test forced --test lengths --no-run \
+            --message-format=json | jq -r 'select(.executable != null) | .executable')
+          for bin in $bins; do
             valgrind --error-exitcode=9 --quiet "$bin"
           done
 

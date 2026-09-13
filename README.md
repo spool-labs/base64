@@ -88,9 +88,13 @@ RUSTFLAGS="-C target-feature=+avx512f,+avx512bw,+avx512vbmi" \
 Over-reads are invisible to `cargo test`, so valgrind finds them:
 
 ```sh
-cargo test --release --features internals --test forced --no-run
+cargo test --release --features internals --test forced --test lengths --no-run
 valgrind --error-exitcode=9 --quiet target/release/deps/forced-*
+valgrind --error-exitcode=9 --quiet target/release/deps/lengths-*
 ```
+
+`forced` pins each x86 path in turn and is empty on aarch64, where `lengths`
+puts the NEON kernel through every length in exactly sized buffers.
 
 The aarch64 kernel cannot run under Miri, which has no `vqtbl4q_u8`.
 

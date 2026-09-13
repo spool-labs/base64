@@ -44,7 +44,7 @@ fn agrees_with_reference(entry: &common::Compared, encoded: &[u8]) {
 
 /// A character outside the alphabet is reported at the offset it sits at
 #[test]
-fn a_byte_outside_the_alphabet_is_named_at_its_own_offset() {
+fn a_byte_outside_the_alphabet_is_reported_at_its_own_offset() {
     let mut rng = Rng::new(0x3F00_1D0C);
     let mut source = vec![0u8; 386];
     rng.fill(&mut source);
@@ -78,7 +78,7 @@ fn a_byte_outside_the_alphabet_is_named_at_its_own_offset() {
 
 /// A character outside the alphabet is reported at its own offset after whole runs of blocks
 #[test]
-fn a_bad_byte_late_in_a_long_input_is_named_at_its_own_offset() {
+fn a_bad_byte_late_in_a_long_input_is_reported_at_its_own_offset() {
     let mut rng = Rng::new(0x2545_F491);
     let mut source = vec![0u8; 1536];
     rng.fill(&mut source);

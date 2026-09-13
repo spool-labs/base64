@@ -26,7 +26,7 @@ fn padding(entry: &Compared, count: usize) -> Vec<u8> {
 
 /// Short groups hold four spare bits or two, and all of them have to be zero
 #[test]
-fn every_trailing_bit_pattern_is_judged_like_the_reference() {
+fn every_trailing_bit_pattern_is_read_like_the_reference() {
     for groups in [0usize, 1, 4, 8, 16, 17] {
         for entry in &CODECS {
             let (name, reference) = (entry.name, &entry.reference);
@@ -142,7 +142,7 @@ fn the_padding_matrix() {
 
 /// Two encodings joined put padding in the middle, which no decode may take
 #[test]
-fn padding_in_the_middle_is_named_where_it_sits() {
+fn padding_in_the_middle_is_reported_where_it_sits() {
     for entry in &CODECS {
         if !entry.is_padded {
             continue;
