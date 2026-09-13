@@ -57,7 +57,6 @@ fn path_of(chosen: u8) -> Path {
 #[cfg(miri)]
 pub fn available() -> u8 {
     if cfg!(all(
-        feature = "avx512",
         target_feature = "avx512f",
         target_feature = "avx512bw",
         target_feature = "avx512vbmi"
@@ -103,7 +102,7 @@ pub fn available() -> u8 {
         let has_vbmi = leaf_seven.ebx & (1 << 16) != 0     // avx512f
             && leaf_seven.ebx & (1 << 30) != 0             // avx512bw
             && leaf_seven.ecx & (1 << 1) != 0; // avx512vbmi
-        if has_zmm_state && has_vbmi && cfg!(feature = "avx512") {
+        if has_zmm_state && has_vbmi {
             WIDE
         } else {
             AVX2

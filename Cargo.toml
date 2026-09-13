@@ -21,11 +21,8 @@ check-cfg = ['cfg(target_os, values("solana"))']
 base64 = { version = "0.23", default-features = false, features = ["std"] }
 
 [features]
-default = ["avx512"]
+default = []
 std = []
-
-# The AVX-512VBMI kernel, on by default. Without it dispatch stops at AVX2.
-avx512 = []
 
 # The `testing` module, which pins the path and the streaming floor for the
 # whole process. Off by default: it is the test suite's, not a caller's.

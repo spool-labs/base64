@@ -63,7 +63,7 @@ fn the_wide_path_is_taken_only_where_vbmi_is() {
         && is_x86_feature_detected!("avx512vbmi");
     assert_eq!(
         testing::available() == testing::WIDE,
-        reported && cfg!(feature = "avx512"),
+        reported,
         "vbmi reported {reported}, path {}",
         testing::available()
     );

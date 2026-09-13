@@ -66,10 +66,9 @@ Six things to know before reading a number:
    tier that a given length never reaches still moved that length by several
    per cent here, through inlining and layout.
 5. **A ratio is only meaningful when both sides run the same instruction
-   set.** On a machine with AVX-512, `base64-turbo` dispatches to it while a
-   build of this crate without the `avx512` feature runs AVX2, and comparing
-   those two produces a number that means nothing. The AVX2 table below is
-   from a machine with no AVX-512 for exactly this reason.
+   set.** On a machine with AVX-512, `base64-turbo` and this crate both
+   dispatch to it, so an AVX2 comparison has to come from a machine with no
+   AVX-512. The AVX2 table below is from one for exactly this reason.
 6. **Some machines are far noisier than others.** The M4 repeats within about
    2% when it is idle, and one run taken while other work was still settling
    read a decode row 29% slow with the encode rows beside it close to true,
@@ -180,8 +179,6 @@ Median of three runs, 2026-08-22.
 | 1048576 | 19.99 | 8.50 | 17.76 | 15.41 | 2.48 | 1.78 | **1.13x** |
 
 ## AMD EPYC Turin, AVX-512VBMI
-
-Behind the `avx512` feature, which is on by default.
 
 <!-- VBMI RESULTS -->
 
