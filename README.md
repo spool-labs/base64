@@ -96,7 +96,7 @@ The aarch64 kernel cannot run under Miri, which has no `vqtbl4q_u8`.
 
 ## Features
 
-| | |
+| feature | what it does |
 |---|---|
 | `std` | `std::error::Error` for the two error types. Off by default |
 | `avx512` | lets dispatch pick the AVX-512VBMI path. On by default |

@@ -11,7 +11,7 @@ of them cost a day here.
 
 ## What it is measured against
 
-| | what it is |
+| crate | what it is |
 |---|---|
 | `base64-simd` | Nugine's crate, 135M downloads, SIMD on x86-64, aarch64 and wasm |
 | `base64-turbo` | the newest entrant, AVX2, AVX-512 and NEON kernels |
@@ -79,7 +79,7 @@ Six things to know before reading a number:
 
 ## Machines
 
-| | |
+| machine | what it is |
 |---|---|
 | **M4** | Apple M4 Max, macOS 26.5, `aarch64-apple-darwin`, rustc 1.93.1, NEON |
 | **Milan** | AMD EPYC Milan, 8 dedicated cores (Hetzner ccx33), 32 MiB L3, Debian 12, rustc 1.98, AVX2, no AVX-512 |
