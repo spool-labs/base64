@@ -33,6 +33,9 @@ mod neon;
 #[cfg(target_arch = "x86_64")]
 mod x86;
 
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+mod wasm;
+
 #[cfg(any(target_arch = "x86_64", test))]
 mod wide;
 
@@ -275,7 +278,10 @@ pub mod testing {
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
-            cfg!(all(target_arch = "aarch64", target_feature = "neon"))
+            cfg!(any(
+                all(target_arch = "aarch64", target_feature = "neon"),
+                all(target_arch = "wasm32", target_feature = "simd128")
+            ))
         }
     }
 

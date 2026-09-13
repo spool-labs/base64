@@ -40,6 +40,7 @@ cargo bench --bench quick       # six sizes against two rivals, for a change
 cargo bench --bench tail        # the fixed cost, in ns, at eight short lengths
 cargo bench --bench shape       # where the time goes at small sizes
 cargo bench --bench huge        # 1 MiB to 128 MiB, across L2, L3 and memory
+node wasm/run.mjs wasm/simd128.wasm   # the wasm kernel under node, built separately
 ```
 
 `tools/report.py` turns one or more runs into the tables below, taking the
@@ -263,6 +264,39 @@ it at 13.7 MiB and `base64-turbo` at 4 MiB.
 | 64 | 16.04 | 15.43 | 8.42 | **1.04x** |
 | 128 | 14.71 | 14.88 | 8.45 | **0.99x** |
 
+## wasm32 under node, simd128
+
+Apple M4 Max, node 24.19, medians of 7, from `bench/wasm`.
+
+### encode (GiB/s)
+
+| bytes | tape-base64 | base64-simd | base64 | vs base64-simd |
+|---|---|---|---|---|
+| 64 | 5.98 | 5.29 | 2.41 | **1.13x** |
+| 256 | 7.23 | 7.66 | 2.74 | **0.94x** |
+| 1024 | 8.69 | 7.69 | 2.40 | **1.13x** |
+| 4096 | 8.72 | 7.54 | 2.98 | **1.16x** |
+| 16384 | 8.77 | 7.45 | 2.97 | **1.18x** |
+| 65536 | 8.84 | 7.57 | 2.96 | **1.17x** |
+| 262144 | 8.70 | 7.48 | 2.89 | **1.16x** |
+| 1048576 | 8.69 | 7.47 | 2.96 | **1.16x** |
+
+### decode (GiB/s)
+
+| bytes | tape-base64 | base64-simd | base64 | vs base64-simd |
+|---|---|---|---|---|
+| 64 | 4.33 | 4.16 | 2.18 | **1.04x** |
+| 256 | 6.62 | 5.87 | 2.42 | **1.13x** |
+| 1024 | 7.15 | 5.68 | 2.17 | **1.26x** |
+| 4096 | 7.18 | 5.56 | 2.60 | **1.29x** |
+| 16384 | 7.14 | 5.52 | 2.57 | **1.29x** |
+| 65536 | 7.19 | 5.49 | 2.54 | **1.31x** |
+| 262144 | 7.16 | 5.52 | 2.54 | **1.30x** |
+| 1048576 | 7.12 | 5.59 | 2.59 | **1.27x** |
+
+Node's own `Buffer` is native and runs faster than any route through wasm, so
+this table is wasm against wasm.
+
 ## What did not work
 
 Kept here because a negative result costs the same to produce as a positive
@@ -284,7 +318,7 @@ one and is lost more easily.
 ## What was learned the hard way
 
 A value where a constant would do cost real throughput in four separate
-places: the AVX2 decode chunk length, the aarch64 decode run length, and both
+places: the AVX2 decode block length, the aarch64 decode run length, and both
 AVX-512 mask computations. A run whose length is a value cannot unroll, and a
 mask derived from a value has to be computed and moved into a mask register
 every iteration. The AVX-512 encoder ran at 0.41x of a rival until its whole

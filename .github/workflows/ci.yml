@@ -141,6 +141,26 @@ jobs:
       - run: cargo fuzz run --target x86_64-unknown-linux-gnu roundtrip -- -max_total_time=60
       - run: cargo fuzz run --target x86_64-unknown-linux-gnu streaming -- -max_total_time=60
 
+  wasm:
+    name: wasm32 (portable and simd128)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --target wasm32-wasip1 --features internals
+      # The simd128 kernel only exists under the target feature, so it gets its own run.
+      - run: cargo test --target wasm32-wasip1 --features internals
+        env:
+          RUSTFLAGS: -C target-feature=+simd128 -D warnings
+
   msrv:
     name: msrv
     runs-on: ubuntu-latest

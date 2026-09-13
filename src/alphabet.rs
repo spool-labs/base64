@@ -7,6 +7,7 @@ use crate::wide::ascii_values;
 #[cfg_attr(
     not(any(
         all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128"),
         target_arch = "x86_64"
     )),
     allow(dead_code)
@@ -39,12 +40,18 @@ pub(crate) trait Alphabet {
     const ASCII_HIGH: &'static [i8; 64];
 
     /// What to add to a value to spell it, by which run it falls in
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128")
+    ))]
     const SPELLING: &'static [i8; 16];
 }
 
 /// What to add to a value to spell it, by which run it falls in
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "wasm32", target_feature = "simd128")
+))]
 const fn spelling(chars: &[u8; 64]) -> [i8; 16] {
     let mut table = [0i8; 16];
     table[0] = chars[0] as i8;
@@ -66,6 +73,7 @@ pub(crate) const INVALID: u8 = 0xFF;
 #[cfg_attr(
     not(any(
         all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128"),
         target_arch = "x86_64"
     )),
     allow(dead_code)
@@ -105,9 +113,15 @@ static STANDARD_ASCII_HIGH: [i8; 64] = ascii_values(STANDARD_CHARS, 1);
 static URL_SAFE_ASCII_LOW: [i8; 64] = ascii_values(URL_SAFE_CHARS, 0);
 #[cfg(target_arch = "x86_64")]
 static URL_SAFE_ASCII_HIGH: [i8; 64] = ascii_values(URL_SAFE_CHARS, 1);
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "wasm32", target_feature = "simd128")
+))]
 static STANDARD_SPELLING: [i8; 16] = spelling(STANDARD_CHARS);
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "wasm32", target_feature = "simd128")
+))]
 static URL_SAFE_SPELLING: [i8; 16] = spelling(URL_SAFE_CHARS);
 
 impl Alphabet for Standard {
@@ -134,7 +148,10 @@ impl Alphabet for Standard {
     const ASCII_LOW: &'static [i8; 64] = &STANDARD_ASCII_LOW;
     #[cfg(target_arch = "x86_64")]
     const ASCII_HIGH: &'static [i8; 64] = &STANDARD_ASCII_HIGH;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128")
+    ))]
     const SPELLING: &'static [i8; 16] = &STANDARD_SPELLING;
 }
 
@@ -162,7 +179,10 @@ impl Alphabet for UrlSafe {
     const ASCII_LOW: &'static [i8; 64] = &URL_SAFE_ASCII_LOW;
     #[cfg(target_arch = "x86_64")]
     const ASCII_HIGH: &'static [i8; 64] = &URL_SAFE_ASCII_HIGH;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128")
+    ))]
     const SPELLING: &'static [i8; 16] = &URL_SAFE_SPELLING;
 }
 

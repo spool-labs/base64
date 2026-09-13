@@ -59,7 +59,10 @@ level cache, read from cpuid, the x86 encoder streams its stores past the cache.
 | aarch64 | `ld3`/`st4` blocks of 48 bytes, alphabet through one four-register lookup |
 | x86-64 with AVX2 | 3 bytes gathered into each lane, fields split by a pair of multiplies |
 | x86-64 with AVX-512VBMI | `vpermb` for the alphabet, `vpmultishiftqb` for the fields, masked at both ends |
+| wasm32 with simd128 | 16 byte lookups through `i8x16.swizzle`, fields split by four masked shifts |
 | anything else | portable, two groups per wide load |
+
+The wasm kernel runs when the crate is built with `-C target-feature=+simd128`.
 
 The AVX2 path has run on EPYC Milan and Xeon Skylake-SP, the AVX-512VBMI path
 on EPYC Turin under valgrind, and Skylake-SP, which has AVX-512 without VBMI,
