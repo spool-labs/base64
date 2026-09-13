@@ -1,9 +1,7 @@
 //! Held against the `base64` crate, over inputs nobody would think to write
 //!
-//! Encoding is checked character for character. Decoding is checked both
-//! ways: that the two agree on what valid characters mean, and that they
-//! agree on which inputs are valid at all, including inputs built to sit
-//! just outside the alphabet, at the padding, or at the trailing bits.
+//! Encoding is checked character for character, and decoding both on what valid
+//! characters mean and on which inputs are valid at all.
 
 mod common;
 
@@ -77,12 +75,10 @@ fn decoding_matches_the_reference() {
     }
 }
 
-/// The two agree on which inputs are valid, over characters chosen to land
-/// on every boundary the classification has
+/// The two agree on which inputs are valid, over characters on every boundary
 #[test]
 fn validity_matches_the_reference() {
-    // Characters at the edges of the alphabet's rows, the padding, and a few
-    // bytes that are in no row at all
+    // Characters at the edges of the alphabet's rows, the padding, and bytes in no row
     const INTERESTING: [u8; 24] = [
         b'A', b'Z', b'a', b'z', b'0', b'9', b'+', b'/', b'=', b'-', b'_', b'.', b',', b':', b';',
         b'@', b'[', b'`', b'{', 0x00, 0x1F, 0x7F, 0x80, 0xFF,
@@ -111,8 +107,7 @@ fn validity_matches_the_reference() {
     }
 }
 
-/// One byte of an encoding changed to something else, at every offset: the
-/// two have to agree about whether the result still decodes, and to what
+/// One byte changed at every offset, the two agreeing on whether it still decodes and to what
 #[test]
 fn a_single_changed_character_matches_the_reference() {
     let mut rng = Rng::new(0xF00D);

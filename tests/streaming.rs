@@ -34,10 +34,6 @@ fn streamed_encode(codec: Codec, pieces: &[&[u8]]) -> Vec<u8> {
 }
 
 /// Decode by pushing the pieces, ignoring what pushes say, and finishing
-///
-/// A refusal speaks twice, once where it happened and once at the end, and
-/// the end is the one this holds inputs to. Once one has spoken, what the
-/// pushes wrote is no longer compared, as with a whole-input refusal.
 fn streamed_decode(codec: Codec, pieces: &[&[u8]]) -> Result<Vec<u8>, DecodeError> {
     let mut decoder = codec.decoder();
     let mut out = Vec::new();
@@ -195,10 +191,7 @@ fn refusals_match_the_batch() {
     }
 }
 
-// a long input corrupted early refuses the same way in any chunking
-//
-// What follows a refusal is counted rather than read, and the count is what
-// the length and padding rules are applied to at the end.
+// a long input corrupted early refuses the same way however it is split
 #[test]
 fn a_refusal_partway_matches_the_batch() {
     let mut rng = Rng::new(0x0BAD_5EED);
@@ -316,8 +309,7 @@ fn short_finish_buffer() {
     );
 }
 
-// an ending carrying bits the output cannot hold is refused at `finish`, not
-// dropped by a buffer too short to have written it
+// an ending with bits the output cannot hold is refused at `finish`
 #[test]
 fn finish_judges_the_last_symbol() {
     let codec = tape_base64::STANDARD_NO_PAD;

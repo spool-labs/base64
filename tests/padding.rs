@@ -1,9 +1,7 @@
 //! Padding, the lengths it makes possible, and the bits a short group cannot hold
 //!
-//! A group of two or three characters holds more bits than the bytes it
-//! decodes to have room for. The spare ones have to be zero, or the same bytes
-//! would have two spellings, so every one of the sixty-four values the last
-//! character can take is put through both short groups here.
+//! A short group holds more bits than its bytes have room for, so every one of the
+//! sixty-four values the last character can take is put through both short groups.
 
 mod common;
 
@@ -12,8 +10,7 @@ use base64::Engine as _;
 use common::{Compared, CODECS};
 use tape_base64::DecodeError;
 
-/// An encoding of `groups` whole groups of the value zero, to sit in front of
-/// a short group so the tail follows a block the kernel took
+/// An encoding of `groups` whole groups of zero, to put a short group after a kernel block
 fn prefix(entry: &Compared, groups: usize) -> Vec<u8> {
     vec![entry.alphabet[0]; groups * 4]
 }
@@ -27,8 +24,7 @@ fn padding(entry: &Compared, count: usize) -> Vec<u8> {
     }
 }
 
-/// A two-character group holds four bits the single byte cannot hold, and a
-/// three-character group two, and all of them have to be zero
+/// Short groups hold four spare bits or two, and all of them have to be zero
 #[test]
 fn every_trailing_bit_pattern_is_judged_like_the_reference() {
     for groups in [0usize, 1, 4, 8, 16, 17] {
@@ -133,8 +129,7 @@ fn the_padding_matrix() {
                 "{name} accepted an extra pad at length {length}"
             );
 
-            // A whole group of padding, which is three pad characters in the
-            // last group whichever way the length falls
+            // A whole group of padding, three pad characters however the length falls
             let mut group = encoded.clone();
             group.extend_from_slice(b"====");
             assert!(
@@ -145,8 +140,7 @@ fn the_padding_matrix() {
     }
 }
 
-/// Two encodings joined put padding in the middle of the result, which no
-/// encoder produces and no decode may take
+/// Two encodings joined put padding in the middle, which no decode may take
 #[test]
 fn padding_in_the_middle_is_named_where_it_sits() {
     for entry in &CODECS {
@@ -217,8 +211,7 @@ fn every_character_count_is_accepted_or_refused_like_the_reference() {
     for length in 0..=260usize {
         for entry in &CODECS {
             let name = entry.name;
-            // Every character is the value zero, so nothing but the length
-            // and the padding rule can decide this
+            // Every character is the value zero, so only the length and the padding rule decide
             let encoded = vec![entry.alphabet[0]; length];
 
             let is_valid_length = if entry.is_padded {

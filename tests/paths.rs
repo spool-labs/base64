@@ -7,13 +7,7 @@ mod common;
 use common::Rng;
 use tape_base64::testing;
 
-/// Say which path the differential tests below are actually exercising
-///
-/// On aarch64 there is always one. On x86-64 there is one only if the
-/// processor reports AVX2 or better, and under an emulator that stops short
-/// of AVX2 there is none, in which case the tests below are comparing the
-/// portable walk with itself and prove nothing, which is worth saying out
-/// loud rather than passing quietly.
+/// Say which path the tests below are exercising, since without a vector one they prove nothing
 #[test]
 fn the_vector_path_is_the_one_being_tested() {
     if cfg!(target_arch = "aarch64") {
@@ -29,8 +23,7 @@ fn the_vector_path_is_the_one_being_tested() {
     }
 }
 
-/// What the vector encode stage writes has to be what the portable walk
-/// would have written over the same bytes
+/// The vector encode stage writes what the portable walk would have written
 #[test]
 fn encode_stages_agree() {
     let mut rng = Rng::new(0xB10C);
@@ -90,8 +83,7 @@ fn decode_stages_agree() {
     }
 }
 
-/// A character outside the alphabet is never inside what the vector stage
-/// claims, wherever it falls, and the codec still reports its offset
+/// A character outside the alphabet is never inside what the vector stage claims
 #[test]
 fn the_vector_stage_never_claims_a_bad_character() {
     for position in 0..512 {
@@ -152,8 +144,7 @@ fn to_url_safe(encoded: &mut [u8]) {
     }
 }
 
-/// Whatever the codec picks, the characters and the bytes are the ones the
-/// portable walk would have produced, at every length
+/// Whatever the codec picks, it produces what the portable walk would, at every length
 #[test]
 fn every_length_of_the_codec_agrees_with_the_portable_walk() {
     let mut rng = Rng::new(0x5A17_C0DE);
@@ -201,8 +192,7 @@ fn every_length_of_the_codec_agrees_with_the_portable_walk() {
     }
 }
 
-/// The vector stage at every length, in both alphabets, against characters
-/// the portable walk spelled
+/// The vector stage at every length, in both alphabets, against the portable walk
 #[test]
 fn every_length_of_the_vector_stage_agrees_with_the_portable_walk() {
     let mut rng = Rng::new(0x71C0_FFEE);

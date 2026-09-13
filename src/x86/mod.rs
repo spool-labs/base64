@@ -11,8 +11,7 @@ pub(crate) use dispatch::Path;
 #[cfg(feature = "internals")]
 pub use dispatch::{available, force, force_stream_floor, AVX2, PORTABLE, UNKNOWN, WIDE};
 
-/// Below this no cache is small enough for streaming to be the right answer,
-/// so a short buffer settles the question with one compare
+/// Below this no cache is small enough for streaming, so one compare settles it
 #[cfg(not(miri))]
 const STREAM_CANDIDATE: usize = 1 << 16;
 
@@ -26,14 +25,11 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
         // SAFETY: cpuid reported the path, so the instructions are present.
         Path::Wide => unsafe { avx512::encode_bulk::<A>(input, out, groups) },
         Path::Avx2 => {
-            // Asked here rather than inside the kernel, so the ordinary form
-            // has neither the test nor a branch that would give it a frame
-            // it does not otherwise need.
+            // Asked here, so the ordinary form has neither the test nor the frame it would need.
             let is_streaming = input.len() >= STREAM_CANDIDATE
                 && input.len() >= dispatch::stream_floor()
                 && out.as_ptr().align_offset(16) == 0;
-            // SAFETY: cpuid reported the path, and streaming is only chosen
-            // once the output is known to be aligned for it.
+            // SAFETY: cpuid reported the path, and streaming is chosen only on an aligned output.
             unsafe {
                 if is_streaming {
                     avx2::encode_bulk::<A, true>(input, out, groups)

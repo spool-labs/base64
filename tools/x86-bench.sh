@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 # Measure this crate on x86-64, on a machine that has the instructions.
 #
-# There is none to hand on Apple silicon: Rosetta stops at SSE4.1, so the
-# AVX2 and AVX-512 kernels can be compiled locally but never run. This raises
-# one and keeps it, because the point is to iterate on it: `up` once, then
-# `sync`, `test` and `bench` as often as needed, and `down` at the end.
-# Nothing here deletes the machine on its own; `down` is the only thing that
-# does, so an interrupted run leaves it rather than throwing away a toolchain
-# that took two minutes to install. It bills by the hour until then, which is
-# what `status` is for.
+# Rosetta stops at SSE4.1, so the AVX2 and AVX-512 kernels compile on Apple silicon
+# but never run. `up` once, then `sync`, `test` and `bench` as often as needed, and
+# `down` at the end, which is the only thing that deletes the machine.
 #
 #   TAPE_CLOUD=hetzner tools/x86-bench.sh up   # ccx33, EPYC Milan: AVX2
 #   TAPE_CLOUD=gcp     tools/x86-bench.sh up   # c4d, EPYC Turin: AVX-512 VBMI
@@ -43,9 +38,7 @@ on() {
   fi
 }
 
-# Google's images do not log in as root, so everything is prefixed there.
-# One `sudo` in front of a multi-command string only covers the first command,
-# so the whole string goes to a shell that is itself root.
+# Google's images do not log in as root, and one `sudo` covers only the first command.
 sudo_on() { if [ "$CLOUD" = gcp ]; then on "sudo sh -c '$1'"; else on "$1"; fi; }
 cargo_on() { on "source ~/.cargo/env && cd ~/base64${1:+/$1} && $2"; }
 
@@ -74,8 +67,7 @@ case "$CMD" in
     ;;
 
   cpu)
-    # Which kernels this machine can run is the first thing worth knowing:
-    # AVX2 is on everything, AVX-512 with VBMI is not.
+    # Which kernels this machine can run is the first thing worth knowing.
     on 'lscpu | grep -E "^Model name" | sed "s/  */ /g"'
     on 'echo -n "vector: "; lscpu | tr " " "\n" | grep -xE "avx2|avx512f|avx512bw|avx512vl|avx512vbmi" | sort -u | tr "\n" " "; echo'
     ;;

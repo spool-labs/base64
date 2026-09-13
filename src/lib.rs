@@ -109,9 +109,7 @@ impl Codec {
         decoded_len(len)
     }
 
-    /// Bytes `input` decodes to, sized from its length and padding alone
-    ///
-    /// The characters are not read, so it answers for input a decode refuses.
+    /// Bytes `input` decodes to, from its length and padding without reading it
     #[inline]
     pub fn decoded_len(&self, input: &[u8]) -> Result<usize, DecodeError> {
         Ok(decoded_len(self.payload(input)?.len()))
@@ -182,9 +180,6 @@ pub(crate) const fn decoded_len(len: usize) -> usize {
 }
 
 /// Whether `len` characters are a count some encoding produces
-///
-/// One character past a whole group holds 6 bits, short of a byte, and a
-/// padded encoding is always a whole number of groups.
 pub(crate) const fn length_ok(len: usize, is_padded: bool) -> bool {
     if is_padded {
         len.is_multiple_of(4)
@@ -215,9 +210,6 @@ pub const fn encoded_len(len: usize) -> Option<usize> {
 }
 
 /// Internals the test suite checks and the benchmarks time, not a public API
-///
-/// Behind the `internals` feature, because pinning the path or the streaming
-/// floor is a property of the whole process rather than of one caller.
 #[cfg(feature = "internals")]
 #[doc(hidden)]
 pub mod testing {

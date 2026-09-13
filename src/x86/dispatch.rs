@@ -54,9 +54,6 @@ fn path_of(chosen: u8) -> Path {
 }
 
 /// The widest path the build allows, where there is no `cpuid` to ask
-///
-/// Miri interprets the instructions but not `cpuid`, so under it the target
-/// features the build was given stand in for what a processor would report.
 #[cfg(miri)]
 pub fn available() -> u8 {
     if cfg!(all(
@@ -76,8 +73,7 @@ pub fn available() -> u8 {
 /// The widest path this machine can run, without recording it
 #[cfg(not(miri))]
 pub fn available() -> u8 {
-    // SAFETY: each leaf and `xgetbv` is reached only once an earlier answer
-    // has said it is there.
+    // SAFETY: each leaf and `xgetbv` is reached only once an earlier answer said it is there.
     unsafe {
         let highest = __cpuid(0).eax;
         if highest < 7 {
@@ -90,8 +86,7 @@ pub fn available() -> u8 {
             return PORTABLE;
         }
         let state = _xgetbv(0);
-        // Without the operating system saving the vector registers across a
-        // context switch, the instructions are there but unusable.
+        // The instructions are unusable unless the operating system saves the vector registers.
         let has_ymm_state = state & 0b110 == 0b110;
         if !has_ymm_state {
             return PORTABLE;
@@ -104,11 +99,10 @@ pub fn available() -> u8 {
 
         // Opmask, and both halves of the wide registers
         let has_zmm_state = state & 0b1110_0000 == 0b1110_0000;
-        // Exactly the features the kernel is written in.
+        // Exactly the features the kernel is written in, since without VBMI `vpermb` faults.
         let has_vbmi = leaf_seven.ebx & (1 << 16) != 0     // avx512f
             && leaf_seven.ebx & (1 << 30) != 0             // avx512bw
             && leaf_seven.ecx & (1 << 1) != 0; // avx512vbmi
-                                               // AVX-512 without VBMI has to decline rather than fault on `vpermb`.
         if has_zmm_state && has_vbmi && cfg!(feature = "avx512") {
             WIDE
         } else {
@@ -121,23 +115,13 @@ pub fn available() -> u8 {
 const UNMEASURED: usize = 0;
 
 /// The range a last level cache descriptor has to land in to be believed
-///
-/// Three sevenths of the smallest is 27 KiB, so a floor that was measured is
-/// never `UNMEASURED` and the two answers cannot be confused.
 const SMALLEST_CACHE: usize = 1 << 16;
 const LARGEST_CACHE: usize = 1 << 31;
 const _: () = assert!(SMALLEST_CACHE / 7 * 3 > UNMEASURED);
 
 static FLOOR: AtomicUsize = AtomicUsize::new(UNMEASURED);
 
-/// The input length past which an encode should stop keeping its output
-///
-/// An encode touches its input and an output a third larger again, so the pair
-/// leaves the last level cache at about three sevenths of it. Past that,
-/// writing through the cache only evicts what the next block is about to read.
-/// A processor that will not say how big its cache is, or that answers with a
-/// size outside `SMALLEST_CACHE..=LARGEST_CACHE`, gets `usize::MAX`, which
-/// never fires.
+/// The input length past which an encode should write past the cache, `usize::MAX` if unknown
 pub(crate) fn stream_floor() -> usize {
     match FLOOR.load(Ordering::Relaxed) {
         UNMEASURED => {
@@ -153,9 +137,6 @@ pub(crate) fn stream_floor() -> usize {
 }
 
 /// One `cpuid` leaf, or all zeros where the interpreter has no `cpuid`
-///
-/// A processor answering zero describes no caches, which is the answer that
-/// leaves the streaming floor out of reach.
 // `cpuid` became a safe call after the msrv, where the block is still needed.
 #[allow(unused_unsafe)]
 fn cpuid(leaf: u32, index: u32) -> CpuidResult {
@@ -204,10 +185,7 @@ fn last_level_bytes() -> Option<usize> {
     (largest > 0).then_some(largest)
 }
 
-/// Bytes a cache descriptor stands for, or nothing where it is not believable
-///
-/// Four fields nothing has validated, whose product reaches 2^64 if a
-/// hypervisor answers a leaf it does not implement with all ones.
+/// Bytes a cache descriptor stands for, or nothing where the four fields are not believable
 fn cache_bytes(ebx: u32, ecx: u32) -> Option<usize> {
     let ways = ((ebx >> 22) & 0x3ff) as usize + 1;
     let partitions = ((ebx >> 12) & 0x3ff) as usize + 1;
@@ -219,10 +197,7 @@ fn cache_bytes(ebx: u32, ecx: u32) -> Option<usize> {
         .filter(|size| (SMALLEST_CACHE..=LARGEST_CACHE).contains(size))
 }
 
-/// Pin the streaming floor, for a test that wants to reach it without
-/// converting as much as this machine's cache holds
-///
-/// Zero puts it back to whatever the processor says.
+/// Pin the streaming floor for a test, zero putting it back to what the processor says
 #[cfg(feature = "internals")]
 pub fn force_stream_floor(bytes: usize) {
     FLOOR.store(bytes, Ordering::Relaxed);
@@ -232,8 +207,7 @@ pub fn force_stream_floor(bytes: usize) {
 ///
 /// # Safety
 ///
-/// The path must be one the running processor can execute, which past
-/// `PORTABLE` means no wider than what `available` reports.
+/// The path must be one the running processor can execute.
 #[cfg(feature = "internals")]
 pub unsafe fn force(chosen: u8) {
     CHOSEN.store(chosen, Ordering::Relaxed);

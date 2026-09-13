@@ -33,8 +33,7 @@ fn check_agreement(input: &[u8]) {
     let chars = tape_base64::STANDARD.encode(input, &mut mine).unwrap();
 
     let mut theirs = vec![0u8; mine.len()];
-    // SAFETY: the buffer is longer than the padded encoding of `input`, which
-    // is all `fd_base64_encode` writes.
+    // SAFETY: the buffer is longer than the padded encoding of `input`, which is all it writes.
     let count = unsafe { fd_base64_encode(theirs.as_mut_ptr(), input.as_ptr(), input.len()) };
     assert_eq!(&theirs[..count], &mine[..chars], "firedancer encode differs");
 

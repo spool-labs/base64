@@ -9,8 +9,7 @@ use base64::Engine as _;
 
 use common::{Compared, Rng, CODECS};
 
-/// Characters an encoding is built from, the padding, and bytes that sit just
-/// outside every row of the alphabet
+/// Characters an encoding is built from, the padding, and bytes just outside every row
 const SOUP: [u8; 32] = [
     b'A', b'B', b'M', b'Z', b'a', b'b', b'm', b'z', b'0', b'5', b'9', b'+', b'/', b'-', b'_', b'=',
     b'@', b'[', b'`', b'{', b':', b';', b'<', b'>', b'^', b'.', b',', 0x00, 0x0A, 0x7F, 0x80, 0xFF,
@@ -21,8 +20,7 @@ fn check_decode(entry: &Compared, encoded: &[u8]) {
     let mine = common::decode_to_vec(entry.codec, encoded);
     let theirs = entry.reference.decode(encoded);
     if let Ok(mine) = &mine {
-        // What the length says before the characters are read has to be what
-        // reading them writes
+        // What the length says before the characters are read has to be what reading them writes
         assert_eq!(entry.codec.decoded_len(encoded), Ok(mine.len()));
     }
     match (mine, theirs) {
@@ -42,8 +40,7 @@ fn check_decode(entry: &Compared, encoded: &[u8]) {
     }
 }
 
-/// A length that is usually short and occasionally long enough for a kernel
-/// loop to run many times
+/// A length that is usually short and occasionally long enough for a kernel loop to run
 fn length(rng: &mut Rng) -> usize {
     match rng.below(4) {
         0 => rng.below(16),
@@ -133,8 +130,7 @@ fn random_character_soup_is_judged_like_the_reference() {
     }
 }
 
-/// An encoding cut and joined at random offsets, which is where padding ends
-/// up in the middle and lengths end up where no encoder leaves them
+/// An encoding cut and joined at random offsets, leaving padding in the middle
 #[test]
 fn random_splices_are_judged_like_the_reference() {
     for seed in [0xC0AC_29B7u64, 0xC97C_50DD, 0x3F84_D5B5, 0xB547_0917] {
@@ -155,8 +151,7 @@ fn random_splices_are_judged_like_the_reference() {
     }
 }
 
-/// Whatever the outcome, a conversion writes nothing past what it returns and
-/// nothing at all into a buffer it refused
+/// A conversion writes nothing past what it returns, and nothing into a buffer it refused
 #[test]
 fn random_conversions_write_only_what_they_return() {
     let mut rng = Rng::new(0x9216_D5D9);

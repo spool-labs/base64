@@ -1,11 +1,8 @@
 //! Every length a block size could stumble on, and the buffers to match
 //!
-//! Kernels take blocks of twelve, sixteen, twenty-four, thirty-two, forty-eight
-//! or sixty-four bytes and leave the rest to a portable tail, so the lengths
-//! that break one are the multiples of a block size and their neighbours. Rather
-//! than guess which, every length up to a kilobyte is converted and held against
-//! the reference crate, and every one of them is also given an output buffer of
-//! exactly the size asked for and one byte less than that.
+//! Kernels work in blocks of twelve to sixty-four bytes, so every length up to a
+//! kilobyte is converted, held against the reference crate, and given a buffer of
+//! exactly the size asked for and one byte less.
 
 mod common;
 
@@ -47,8 +44,7 @@ fn compare_at_length(entry: &Compared, input: &[u8]) {
     assert_eq!(theirs, input, "{name} disagreed at length {length}");
 }
 
-/// A different window of the source for each length, so that no encoding is a
-/// prefix of the next
+/// A different window of the source for each length, so no encoding is a prefix of the next
 fn window(source: &[u8], length: usize) -> &[u8] {
     let start = (length * 7) % 64;
     &source[start..start + length]
@@ -76,8 +72,7 @@ fn a_sparse_sweep_past_a_kilobyte_matches_the_reference() {
     rng.fill(&mut source);
 
     let mut lengths: Vec<usize> = (1024..=8192).step_by(97).collect();
-    // Every length under a kilobyte is covered above, so past it only the
-    // round numbers a loop count could stumble on are worth the time
+    // Every length under a kilobyte is covered above, so past it only the round numbers matter
     for round in [1536usize, 2048, 3072, 4096, 6144, 8192] {
         lengths.extend([round - 1, round, round + 1]);
     }
@@ -89,8 +84,7 @@ fn a_sparse_sweep_past_a_kilobyte_matches_the_reference() {
     }
 }
 
-/// A buffer of exactly the size asked for is enough, and one byte less is
-/// refused without a byte of it being touched
+/// A buffer of exactly the size asked for is enough, and one byte less is refused untouched
 #[test]
 fn an_exact_buffer_is_enough_and_one_byte_short_is_not() {
     let mut rng = Rng::new(0x7C1B_9E42);

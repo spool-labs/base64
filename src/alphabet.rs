@@ -38,8 +38,7 @@ pub(crate) trait Alphabet {
     #[cfg(target_arch = "x86_64")]
     const ASCII_HIGH: &'static [i8; 64];
 
-    /// What to add to a value to spell it, chosen by which run of the
-    /// alphabet it falls in
+    /// What to add to a value to spell it, by which run it falls in
     #[cfg(target_arch = "x86_64")]
     const SPELLING: &'static [i8; 16];
 }
@@ -76,7 +75,7 @@ pub(crate) const ODD_VALUE: u8 = 63;
 /// RFC 4648 section 4, the alphabet ending `+/`
 pub(crate) struct Standard;
 
-/// RFC 4648 section 5, the alphabet ending `-_`, safe in a URL or a file name
+/// RFC 4648 section 5, the alphabet ending `-_`, safe in a URL or a path
 pub(crate) struct UrlSafe;
 
 const STANDARD_CHARS: &[u8; 64] =
@@ -115,8 +114,7 @@ impl Alphabet for Standard {
     const ENCODE: &'static [u8; 64] = STANDARD_CHARS;
     const DECODE: &'static [u8; 256] = &STANDARD_DECODE;
 
-    // Rows 2 through 7 hold every character, and bit 4 stands for the 10 that
-    // hold none, so a byte in one of those fails whatever its nibble.
+    // Rows 2 through 7 hold every character, and bit 4 marks the rows that hold none.
     const LUT_LO: &'static [u8; 16] = &[
         0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, //
         0x11, 0x11, 0x13, 0x1A, 0x1B, 0x1B, 0x1B, 0x1A,
@@ -215,7 +213,6 @@ mod tests {
         tables_agree::<Standard>();
     }
 
-    // the same, for the url-safe alphabet
     #[test]
     fn url_safe_tables() {
         tables_agree::<UrlSafe>();
@@ -227,7 +224,6 @@ mod tests {
         is_a_bijection::<Standard>();
     }
 
-    // the same, for the url-safe alphabet
     #[test]
     fn url_safe_bijection() {
         is_a_bijection::<UrlSafe>();

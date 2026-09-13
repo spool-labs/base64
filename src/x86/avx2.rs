@@ -9,22 +9,16 @@ use core::arch::x86_64::*;
 
 use crate::alphabet::{Alphabet, ODD_VALUE};
 
-// An explicit import shadows the glob above, so the kernel below reads the
-// same whichever of the two is in scope.
+// The explicit import shadows the glob above, so the kernel reads the same either way.
 #[cfg(miri)]
 use shims::{_mm_sfence, _mm_stream_si128};
 
 /// Models of the two stores the interpreter has no version of
-///
-/// Compiled only under `cfg(miri)`.
 #[cfg(miri)]
 mod shims {
     use core::arch::x86_64::{__m128i, _mm_storeu_si128};
 
-    /// `movntdq`: the same 16 bytes as an ordinary store, ordered more weakly
-    ///
-    /// The instruction faults on a destination that is not 16 byte aligned,
-    /// which is the part of it a run under the interpreter can check.
+    /// `movntdq`: the same 16 bytes as an ordinary store, faulting unless 16 byte aligned
     #[inline]
     pub unsafe fn _mm_stream_si128(destination: *mut __m128i, value: __m128i) {
         assert!(
@@ -51,11 +45,7 @@ const HALF_IN: usize = 12;
 /// Blocks converted at a time in the steady state
 const UNROLL: usize = 8;
 
-/// Gather 3 bytes into each 32 bit lane, as `[b1 b0 b2 b1]`
-///
-/// The low half takes the 12 bytes at the start of what it was given, the high
-/// half the 12 at the end, so two overlapping 16 byte loads cover 24 bytes
-/// with nothing read past either end.
+/// Gather 3 bytes into each 32 bit lane, each half of the register from its own 12 bytes
 const SPLIT_LOW: [i8; 16] = [1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10];
 const SPLIT_HIGH: [i8; 16] = [5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14];
 
@@ -93,10 +83,7 @@ impl Wide {
 }
 
 impl Narrow {
-    /// The low half of the wide keys, which is the same table and the same two
-    /// multipliers
-    ///
-    /// Taken by cast rather than made again, which costs nothing.
+    /// The low half of the wide keys, taken by cast rather than made again
     ///
     /// # Safety
     ///
@@ -114,15 +101,11 @@ impl Narrow {
     }
 }
 
-/// Convert `groups` whole groups, returning how many were converted
-///
-/// With `STREAM` the whole blocks write past the cache rather than through it.
-/// The caller decides that, so the ordinary form has none of it.
+/// Convert `groups` whole groups, returning how many, writing past the cache with `STREAM`
 ///
 /// # Safety
 ///
-/// The running machine must have AVX2, and with `STREAM` the output must be
-/// 16 byte aligned.
+/// The running machine must have AVX2, and with `STREAM` the output must be 16 byte aligned.
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn encode_bulk<A: Alphabet, const STREAM: bool>(
     input: &[u8],
@@ -132,28 +115,20 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet, const STREAM: bool>(
     if groups < HALF_IN / 3 || groups * 3 > input.len() || groups * 4 > out.len() {
         return 0;
     }
-    // SAFETY: every block converts groups `start` through `start + n` for some
-    // `start + n <= groups`, which the caller has room for on both sides. The
-    // blocks that load 4 bytes early are only reached once a block has already
-    // been converted, so those 4 bytes exist.
+    // SAFETY: every block stays inside both buffers, and one loading 4 bytes early follows another.
     unsafe {
         let wide = Wide::load::<A>();
         let narrow = Narrow::of(&wide);
         let split_low = _mm_loadu_si128(SPLIT_LOW.as_ptr().cast());
         let split_high = _mm_loadu_si128(SPLIT_HIGH.as_ptr().cast());
-        // Gathering 12 bytes into each half of a register wants them at the
-        // same offset within it. One load 4 bytes before the block puts them
-        // there, two overlapping loads and an insert also do.
+        // Both halves want their 12 bytes at the same offset: one load 4 bytes early, or two loads.
         let early = _mm256_inserti128_si256(_mm256_castsi128_si256(split_high), split_low, 1);
         let here = _mm256_inserti128_si256(_mm256_castsi128_si256(split_low), split_high, 1);
         let source = input.as_ptr();
         let destination = out.as_mut_ptr();
 
         let mut done = 0;
-        // The first block has nothing 4 bytes to its left, so it makes some:
-        // sliding the register up by one 32 bit lane leaves the first 4 bytes
-        // duplicated where the padding would have been. That is what lets
-        // every block after it take the one load form with no test.
+        // The first block has nothing 4 bytes to its left, so a lane slide leaves a copy there.
         if groups >= BLOCK_IN / 3 && input.len() >= 32 {
             let raw = _mm256_permutevar8x32_epi32(
                 _mm256_loadu_si256(source.cast()),
@@ -165,8 +140,7 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet, const STREAM: bool>(
             done = encode_early::<STREAM>(&wide, early, source, destination, input, groups, done);
         }
 
-        // What is left has no 4 bytes to spare past it, so it goes through the
-        // two load form, which touches exactly what it converts.
+        // What is left has no spare 4 bytes past it, so it takes the two load form.
         while groups - done >= BLOCK_IN / 3 {
             encode_block(&wide, here, source.add(done * 3), destination.add(done * 4));
             done += BLOCK_IN / 3;
@@ -199,12 +173,9 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet, const STREAM: bool>(
 
 /// Convert the blocks that can load 4 bytes early, from `done` onward
 ///
-/// With `STREAM`, the stores go past the cache rather than through it, which
-/// needs `destination` 16 byte aligned and a fence afterwards.
-///
 /// # Safety
 ///
-/// AVX2, and every block from `done` inside both buffers.
+/// AVX2, every block from `done` inside both buffers, and with `STREAM` an aligned destination.
 #[inline(always)]
 unsafe fn encode_early<const STREAM: bool>(
     keys: &Wide,
@@ -215,11 +186,9 @@ unsafe fn encode_early<const STREAM: bool>(
     groups: usize,
     mut done: usize,
 ) -> usize {
-    // SAFETY: both conditions keep the whole block, and the 4 bytes it reads
-    // early, inside what the caller promised.
+    // SAFETY: both conditions keep the block and its 4 early bytes inside the caller's buffers.
     unsafe {
-        // Every load of a run is issued before any of its arithmetic, so the
-        // multiply latency of one block is covered by the next.
+        // Every load of a run issues before any of its arithmetic, so one block covers the next.
         while groups - done >= UNROLL * (BLOCK_IN / 3)
             && done * 3 + (UNROLL - 1) * BLOCK_IN + BLOCK_IN + 4 <= input.len()
         {
@@ -249,16 +218,13 @@ unsafe fn encode_early<const STREAM: bool>(
 ///
 /// # Safety
 ///
-/// AVX2, `destination` writable for 32 bytes, and 16 byte aligned with
-/// `STREAM`.
+/// AVX2, `destination` writable for 32 bytes, and 16 byte aligned with `STREAM`.
 #[inline(always)]
 unsafe fn put<const STREAM: bool>(destination: *mut u8, chars: __m256i) {
     // SAFETY: both forms write exactly the 32 bytes the caller promised.
     unsafe {
         if STREAM {
-            // Two halves rather than one whole: the allocator hands out 16
-            // byte alignment, not 32, so a 32 byte streaming store would
-            // almost never be reachable.
+            // Two halves rather than one whole: the allocator hands out 16 byte alignment, not 32.
             let half = destination.cast::<__m128i>();
             _mm_stream_si128(half, _mm256_castsi256_si128(chars));
             _mm_stream_si128(half.add(1), _mm256_extracti128_si256(chars, 1));
@@ -268,13 +234,7 @@ unsafe fn put<const STREAM: bool>(destination: *mut u8, chars: __m256i) {
     }
 }
 
-/// `vpmullw`, written out
-///
-/// Both multipliers are a power of two in each 16 bit lane, and LLVM rewrites
-/// such a multiply into two shifts and a blend. That is four more uops a
-/// block, all of them on the two ports the shuffles already want. Writing the
-/// instruction as assembly keeps it, and unlike an opaque constant it is not a
-/// barrier, so a short buffer does not pay to materialize what it barely uses.
+/// `vpmullw`, written out so LLVM cannot rewrite the multiply into two shifts and a blend
 ///
 /// # Safety
 ///
@@ -285,8 +245,7 @@ unsafe fn mul_wide(value: __m256i, multiplier: __m256i) -> __m256i {
     let product: __m256i;
     #[cfg(miri)]
     {
-        // The interpreter has no assembler, and no optimiser to keep the
-        // multiply away from either.
+        // The interpreter has no assembler.
         product = _mm256_mullo_epi16(value, multiplier);
     }
     #[cfg(not(miri))]
@@ -331,14 +290,7 @@ unsafe fn mul_narrow(value: __m128i, multiplier: __m128i) -> __m128i {
     product
 }
 
-/// Split 3 bytes into four 6 bit fields, in every 32 bit lane
-///
-/// A multiply by a different power of two in each 16 bit half of a lane is two
-/// different shifts in one instruction, which is the only reason this is
-/// written as arithmetic. Two fields want right shifts of 10 and 6: multiply
-/// by 1 and by 16, then shift everything right by 10, and the leftovers fall
-/// off either end unmasked. The other two want left shifts of 4 and 8, which
-/// needs the mask first because nothing moves their neighbours away.
+/// Split 3 bytes into four 6 bit fields in every 32 bit lane, a multiply doing two shifts at once
 macro_rules! split_bits {
     ($gathered:expr, $align:expr, $field:expr, $and:ident, $mul:ident, $shr:ident, $or:ident,
      $set:ident) => {{
@@ -349,11 +301,7 @@ macro_rules! split_bits {
     }};
 }
 
-/// Turn 6 bit values into characters
-///
-/// 26 of the 64 values share one offset and another 26 share the next, so the
-/// 16 entry table is reached by saturating everything below 52 down to nothing
-/// and telling the two runs apart by a compare.
+/// Turn 6 bit values into characters, indexing the 16 entry table by a saturate and a compare
 macro_rules! spell {
     ($values:expr, $table:expr, $subs:ident, $cmpgt:ident, $sub:ident, $add:ident,
      $shuffle:ident, $set:ident) => {{
@@ -364,9 +312,6 @@ macro_rules! spell {
 }
 
 /// Spell one register's worth: 24 bytes gathered in, 32 characters out
-///
-/// Split from the load and the store so a run can issue all its loads before
-/// any of the arithmetic.
 ///
 /// # Safety
 ///
@@ -406,8 +351,7 @@ unsafe fn encode_vector(keys: &Wide, split: __m256i, raw: __m256i) -> __m256i {
 /// AVX2, `source` readable for 24 bytes, `destination` writable for 32.
 #[inline(always)]
 unsafe fn encode_block(keys: &Wide, split: __m256i, source: *const u8, destination: *mut u8) {
-    // SAFETY: the two loads cover bytes 0 through 16 and 8 through 24, and the
-    // store writes exactly 32.
+    // SAFETY: the two loads cover bytes 0 to 16 and 8 to 24, and the store writes exactly 32.
     unsafe {
         let low = _mm_loadu_si128(source.cast());
         let high = _mm_loadu_si128(source.add(BLOCK_IN - 16).cast());
@@ -423,8 +367,7 @@ unsafe fn encode_block(keys: &Wide, split: __m256i, source: *const u8, destinati
 /// AVX2, `source` readable for 12 bytes, `destination` writable for 16.
 #[inline(always)]
 unsafe fn encode_half(keys: &Narrow, split: __m128i, source: *const u8, destination: *mut u8) {
-    // SAFETY: the 12 bytes are read as 8 and 4, so nothing past them is
-    // touched, and the store writes exactly 16.
+    // SAFETY: the 12 bytes are read as 8 and 4, and the store writes exactly 16.
     unsafe {
         let front = _mm_loadl_epi64(source.cast());
         let back = _mm_cvtsi32_si128(source.add(8).cast::<u32>().read_unaligned() as i32);
@@ -470,13 +413,10 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
         let source = input.as_ptr();
         let destination = out.as_mut_ptr();
 
-        // One reading of the accumulator per block. Here `vptest` is cheap and
-        // the branch predicts, so gathering several blocks measured slower.
+        // One reading of the accumulator per block: `vptest` is cheap and the branch predicts.
         let mut done = 0;
-        // A block with another block behind it can land its 24 bytes in two
-        // overlapping 16 byte stores, which is three fewer shuffles than
-        // cutting them apart. The block behind overwrites the 4 it ran over,
-        // so only a block that has one may take this form.
+        // A block with another behind it stores its 24 bytes as two overlapping 16 byte
+        // stores, since the next block overwrites the 4 it ran over.
         while quads - done >= 16 {
             let found =
                 decode_block::<true>(&tables, source.add(done * 4), destination.add(done * 3));
@@ -580,13 +520,9 @@ macro_rules! merge_bits {
 
 /// Convert 8 groups: 32 characters in, 24 bytes out
 ///
-/// With `SPARE`, the store runs 4 bytes past the 24 and the caller must have
-/// room for them.
-///
 /// # Safety
 ///
-/// AVX2, `source` readable for 32 bytes, `destination` writable for 24, or 28 with
-/// `SPARE`.
+/// AVX2, `source` readable for 32 bytes, `destination` writable for 24, or 28 with `SPARE`.
 #[inline(always)]
 unsafe fn decode_block<const SPARE: bool>(
     tables: &Tables,

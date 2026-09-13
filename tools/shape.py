@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Read a `shape` benchmark run and print where the time goes, in nanoseconds.
 
-criterion picks whatever time unit fits the row, so every unit it can print
-is converted here rather than assumed.
+criterion picks whatever unit fits a row, so every unit it can print is converted.
 """
 
 import re

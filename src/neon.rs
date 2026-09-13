@@ -50,9 +50,7 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
             encode_wide(&table, source.add(done * 3), destination.add(done * 4));
             done += WIDE_GROUPS;
         }
-        // What is left is covered by a block moved back to end where the groups
-        // end, converting a few of them twice. Which block that is is not the
-        // smallest that fits: a deinterleaving load costs the same either width.
+        // The leftover is covered by a block moved back to end with the groups, redoing a few.
         match groups - done {
             0 => {}
             1..=4 => {
@@ -166,7 +164,7 @@ unsafe fn encode_narrow(table: &uint8x16x4_t, source: *const u8, destination: *m
 ///
 /// # Safety
 ///
-/// Always sound: the intrinsic only asks for a target feature aarch64 always has.
+/// NEON is the baseline on aarch64, so the intrinsic is always there.
 #[inline(always)]
 unsafe fn widen(bad: uint8x8_t) -> uint8x16_t {
     // SAFETY: NEON is the baseline on this architecture.
@@ -262,14 +260,11 @@ unsafe fn encode_short(table: &uint8x16x4_t, source: *const u8, destination: *mu
     // SAFETY: loads of 8 and 4 cover the 12 promised, and the store writes 16.
     unsafe {
         let front = vld1_u8(source);
-        // Read as a value rather than through `vld1_dup_u32`, whose pointer is
-        // a `*const u32` the source need not be aligned for.
+        // Read as a value, since `vld1_dup_u32` wants a `*const u32` the source need not suit.
         let back = vreinterpret_u8_u32(vdup_n_u32(source.add(8).cast::<u32>().read_unaligned()));
         let gathered = vqtbl1q_u8(vcombine_u8(front, back), vld1q_u8(GATHER.as_ptr()));
 
-        // Every field is a run of 6 bits inside one 16-bit half of a lane, so a
-        // multiply by a different power of two in each half is two shifts in one
-        // instruction: 5 instructions rather than 11.
+        // Every field is 6 bits inside one 16-bit half, so a multiply does two shifts at once.
         let halves = vreinterpretq_u16_u8(gathered);
         let aligned = vshrq_n_u16::<10>(vmulq_u16(
             halves,
@@ -300,7 +295,7 @@ struct Tables {
 impl Tables {
     /// # Safety
     ///
-    /// Always sound: each `LUT_*` is a 16-byte array, read in full.
+    /// Always sound: each `LUT_*` is a 16 byte array, read in full.
     #[inline]
     unsafe fn load<A: Alphabet>() -> Self {
         // SAFETY: each `LUT_*` is a 16 byte array, read in full.
@@ -316,9 +311,7 @@ impl Tables {
     }
 }
 
-/// Convert `quads` whole groups, returning how many were converted
-///
-/// Stops before any block holding a character outside the alphabet.
+/// Convert `quads` whole groups, returning how many, stopping at a foreign character
 pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usize) -> usize {
     if quads < SHORT_GROUPS || quads * 4 > input.len() || quads * 3 > out.len() {
         return 0;
@@ -333,8 +326,7 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
         let has_tail = quads - full * WIDE_GROUPS > 0;
 
         if full > 0 {
-            // Reading the accumulator back is a branch no later block can start
-            // before, so it is read once per several blocks.
+            // Reading the accumulator back is a branch, so it happens once per several blocks.
             let mut taken = 0;
             let mut done = 0;
             // A constant count, so the run unrolls and the loads issue together.
@@ -430,8 +422,7 @@ unsafe fn decode_short(tables: &Tables, source: *const u8, destination: *mut u8)
             odd_value
         );
 
-        // Sliding the outer pair up and the inner pair down puts the group's 24
-        // bits in a row, most significant first.
+        // Sliding the outer pair up and the inner pair down puts the group's 24 bits in a row.
         let lanes = vreinterpretq_u32_u8(values);
         let outer = vandq_u32(lanes, vdupq_n_u32(0x003F_003F));
         let inner = vandq_u32(lanes, vdupq_n_u32(0x3F00_3F00));
@@ -450,9 +441,7 @@ unsafe fn decode_short(tables: &Tables, source: *const u8, destination: *mut u8)
     }
 }
 
-/// Convert 16 groups: 64 characters in, 48 bytes out
-///
-/// Always writes: bytes from a block that met a bad character are never read.
+/// Convert 16 groups: 64 characters in, 48 bytes out, written even where a character was bad
 ///
 /// # Safety
 ///

@@ -26,8 +26,7 @@ fn roundtrip(codec: Codec, name: &str, input: &[u8]) {
     assert_eq!(&decoded[..back], input, "{name} length {}", input.len());
 }
 
-/// Every length from nothing through five blocks of both kernels, so that
-/// each block count meets each remainder
+/// Every length from nothing through five blocks of both kernels
 #[test]
 fn every_length_up_to_five_blocks() {
     let mut rng = Rng::new(0x5EED);
@@ -90,9 +89,7 @@ fn rfc_test_vectors() {
     }
 }
 
-/// The two alphabets differ only in the last two characters, so an input
-/// that reaches them has to encode differently and each has to refuse the
-/// other's spelling
+/// The alphabets differ only in the last two characters, so each refuses the other's spelling
 #[test]
 fn alphabets_differ_where_they_should() {
     let input = [0xFBu8, 0xFF, 0xBF];
@@ -123,12 +120,7 @@ fn writes_only_what_it_returns() {
     assert!(decoded[back..].iter().all(|&byte| byte == 0xCC));
 }
 
-/// A source that does not start on a word boundary
-///
-/// The aarch64 short block reads the last 4 of its 12 bytes at `source + 8`,
-/// which is a word address only when the source is one, so an offset input
-/// whose tail lands in that block is the case a word-aligned load would get
-/// wrong.
+/// A source off a word boundary, which the aarch64 short block reads at `source + 8`
 #[test]
 fn sources_at_every_offset() {
     #[repr(align(16))]

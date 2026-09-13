@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Median of several `quick` runs, so a comparison is not one run's weather.
 
-Each row is reported as throughput and as a ratio against the better of
-base64-simd and base64-turbo measured in the same run, because those two move
-with the machine exactly as much as this crate does.
+Each row is throughput and a ratio against the better of base64-simd and base64-turbo
+in the same run, since those two move with the machine as much as this crate does.
 """
 
 import re

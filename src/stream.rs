@@ -9,14 +9,10 @@ use crate::error::{DecodeError, EncodeError};
 use crate::scalar;
 use crate::{Codec, Kind};
 
-/// An encode taken a piece at a time
-///
-/// Made by the encoder method on `Codec`. Pieces arrive in any sizes, and
-/// the encoding `finish` completes is the encoding of the pieces joined.
+/// An encode taken a piece at a time, giving what the pieces joined encode to
 pub struct Encoder {
     kind: Kind,
     is_padded: bool,
-    /// Bytes held until the group they started is whole
     held: [u8; 2],
     held_len: u8,
 }
@@ -48,11 +44,7 @@ impl Codec {
 }
 
 impl Encoder {
-    /// Encode all of `input`, writing into `out`
-    ///
-    /// Returns how many characters were written. The call refuses a buffer
-    /// too short for the whole piece rather than convert part of it, so a
-    /// refusal consumes nothing.
+    /// Encode all of `input`, returning characters written, or refuse and consume nothing
     pub fn push(&mut self, input: &[u8], out: &mut [u8]) -> Result<usize, EncodeError> {
         let groups = (usize::from(self.held_len) + input.len()) / 3;
         let needed = groups * 4;
@@ -65,9 +57,7 @@ impl Encoder {
         }
     }
 
-    /// Write the group any held bytes belong to, and with it the encoding
-    ///
-    /// An unpadded codec that ends between groups simply ends there.
+    /// Write the group any held bytes belong to, completing the encoding
     pub fn finish(self, out: &mut [u8]) -> Result<usize, EncodeError> {
         let held = usize::from(self.held_len);
         let count = match (held, self.is_padded) {
@@ -101,8 +91,7 @@ impl Encoder {
         let mut consumed = 0;
         let mut written = 0;
 
-        // A group the last piece left short of three finishes here, out of
-        // what this piece starts with.
+        // A group the last piece left short finishes out of this piece's first bytes.
         if groups > 0 && held > 0 {
             let mut group = [0u8; 3];
             group[..held].copy_from_slice(&self.held[..held]);
@@ -119,9 +108,7 @@ impl Encoder {
             groups - written / 4,
         );
 
-        // What is left waits with nothing behind it. Past a whole group that
-        // is up to two bytes of this piece, before one the piece joins what
-        // was already held.
+        // The bytes past the last whole group wait for the next piece.
         let spare = (held + input.len()) % 3;
         if groups > 0 {
             self.held[..spare].copy_from_slice(&input[input.len() - spare..]);
@@ -134,39 +121,25 @@ impl Encoder {
     }
 }
 
-/// A decode taken a piece at a time
-///
-/// Made by the decoder method on `Codec`. It reads where `Codec::decode`
-/// reads and refuses what it refuses, offsets included. What it cannot name
-/// until the input ends, it holds until `finish`.
+/// A decode taken a piece at a time, reading and refusing where `Codec::decode` does
 pub struct Decoder {
     kind: Kind,
     is_padded: bool,
-    /// Characters of a group the pieces have filled so far
     quad: [u8; 3],
     quad_len: u8,
-    /// Characters accounted for so far, padding included
     total: usize,
-    /// Padding characters at the end of what has been read, three deciding a case
     run: u8,
-    /// A group whose last character is padding. It is an ending exactly when
-    /// nothing follows, so both its bytes and its judgment wait.
     pending: Option<Pending>,
     state: State,
 }
 
-/// Convert one whole quad into the room at the start of `out`
-///
-/// Refuses the first character of the quad outside the alphabet, reported at
-/// `base` plus its place. A quad padded at its end never reaches here, since
-/// only what follows can say whether it was an ending.
+/// Convert one whole quad into `out`, refusing a foreign character at `base` plus its place
 fn take_quad<A: Alphabet>(
     quad: &[u8; 4],
     base: usize,
     out: &mut [u8],
 ) -> Result<usize, DecodeError> {
-    // The walk stops on a character outside the alphabet without reporting it,
-    // which is the same hand-off a vector block makes.
+    // The walk stops on a foreign character without reporting it, as a vector block does.
     if scalar::decode_bulk::<A>(quad, out, 1) == 0 {
         return Err(scalar::find_invalid::<A>(quad, base));
     }
@@ -174,9 +147,6 @@ fn take_quad<A: Alphabet>(
 }
 
 /// Refuse a buffer short of the bytes a held group of `chars` characters owes
-///
-/// Two characters hold one byte and three hold two, which is what a
-/// whole-input decode asks for before it reads anything.
 fn room_for(chars: usize, out: &[u8]) -> Result<(), DecodeError> {
     let needed = chars.saturating_sub(1);
     if out.len() < needed {
@@ -211,17 +181,7 @@ enum State {
 }
 
 impl Decoder {
-    /// Decode all of `input`, writing into `out`
-    ///
-    /// Returns how many bytes were written. The call asks for an upper bound
-    /// of what the piece can write, which a refusal found partway may leave
-    /// partly unspent. What comes before a refusal stays written.
-    ///
-    /// A buffer short of that bound is refused before anything is read, so a
-    /// refusal consumes nothing and the decoder stands where it stood. Once a
-    /// refusal or a padded ending has been seen, every later push returns
-    /// `Ok(0)` while still counting the characters, and the refusal is reported
-    /// again by `finish`.
+    /// Decode all of `input`, returning bytes written; what came before a refusal stays written
     pub fn push(&mut self, input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
         match self.state {
             State::Reading => {}
@@ -233,9 +193,7 @@ impl Decoder {
         if input.is_empty() {
             return Ok(0);
         }
-        // Every 3 bytes written come out of 4 characters, held or arriving.
-        // A group closed by padding is written by `finish` instead, and it is
-        // the last of these groups exactly when the count divides by four.
+        // A group closed by padding is written by `finish`, which is why the last quad drops out.
         let chars = usize::from(self.quad_len) + input.len();
         let mut quads = chars / 4;
         if self.is_padded && chars.is_multiple_of(4) && input.last() == Some(&b'=') {
@@ -251,10 +209,7 @@ impl Decoder {
         }
     }
 
-    /// Complete the decode, writing what the ending held back
-    ///
-    /// The result is what `Codec::decode` returns for the pieces joined,
-    /// errors included.
+    /// Complete the decode, giving what `Codec::decode` gives for the pieces joined
     pub fn finish(mut self, out: &mut [u8]) -> Result<usize, DecodeError> {
         let held = usize::from(self.quad_len);
         match core::mem::replace(&mut self.state, State::Reading) {
@@ -265,8 +220,7 @@ impl Decoder {
                     None => held,
                 };
                 room_for(owed, out)?;
-                // A group held over with padding aboard is the ending the
-                // input stopped on, which nothing has checked until now.
+                // A group held over with padding aboard is the ending, unchecked until now.
                 if let Some(pending) = self.pending.take() {
                     return self.settle(pending, out);
                 }
@@ -307,8 +261,7 @@ impl Decoder {
 
     /// Read a piece in the steady state, where whole groups convert as they land
     fn read<A: Alphabet>(&mut self, input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
-        // A group held over with padding aboard is decided by this piece's
-        // first character, and nothing else today matters.
+        // A group held over with padding aboard is decided by this piece's first character.
         let mut consumed = 0;
         let mut written = 0;
         if let Some(pending) = self.pending.take() {
@@ -325,8 +278,7 @@ impl Decoder {
                 };
                 return Err(self.refuse(Some(cause), 0, &input[consumed..]));
             }
-            // The padding repeated, so the ending held. Its bytes wait for
-            // the end, as does the judgment of whatever follows it.
+            // The padding repeated, so the ending held; its bytes wait for the end.
             self.state = State::Ended {
                 at: self.total,
                 pad: pending.pad,
@@ -338,13 +290,10 @@ impl Decoder {
 
         let held = usize::from(self.quad_len);
 
-        // A group the last piece left short of four completes here. It goes
-        // alone, so the bulk stage below keeps meeting whole quads. Its
-        // first characters were counted when earlier pieces read them.
+        // A group the last piece left short completes alone, so the bulk stage sees whole quads.
         if held > 0 && input.len() >= 4 - held {
             let take = 4 - held;
-            // A quad closed by padding waits on the character loop instead,
-            // which weighs its padding one character at a time.
+            // A quad closed by padding waits for the character loop, which checks each pad.
             let is_ending = self.is_padded && input[take - 1] == b'=';
             if !is_ending {
                 let mut quad = [0u8; 4];
@@ -365,13 +314,7 @@ impl Decoder {
             }
         }
 
-        // Whole quads from here convert in runs, at kernel speed. A run
-        // stops at the first character no encoding holds, which for
-        // padding is not yet a refusal: only a group's own conversion knows
-        // whether an ending stood there.
-        // A run holding padding is refused whole and handed back, so a piece
-        // that ends in padding keeps its last group for the character loop,
-        // which is what weighs padding anyway.
+        // Whole quads convert in runs, but a piece ending in padding keeps its last group back.
         let ending = if self.is_padded && input.last() == Some(&b'=') {
             4
         } else {
@@ -407,15 +350,13 @@ impl Decoder {
             }
         }
 
-        // What is left is short of a group, or holds the padding of an
-        // ending. Neither commits until the input does.
+        // What is left is short of a group, or is an ending's padding; neither commits yet.
         for index in consumed..input.len() {
             let byte = input[index];
             let rest = &input[index + 1..];
             self.total += 1;
 
-            // A group held over with padding becomes an ending exactly when
-            // this, its next character, is padding too.
+            // A group held over with padding ends the input when the next character is padding too.
             if let Some(pending) = self.pending.take() {
                 if byte != b'=' {
                     let cause = DecodeError::InvalidByte {
@@ -424,8 +365,7 @@ impl Decoder {
                     };
                     return Err(self.refuse(Some(cause), 0, rest));
                 }
-                // The padding repeated, so the ending held. Its bytes wait
-                // for the end, as does the judgment of whatever follows it.
+                // The padding repeated, so the ending held; its bytes wait for the end.
                 self.state = State::Ended {
                     at: self.total,
                     pad: pending.pad,
@@ -437,9 +377,7 @@ impl Decoder {
 
             let held = usize::from(self.quad_len);
 
-            // Padding ends a group, and whether it ends the input too is
-            // the next character's news. Every character parked before it
-            // has been found in the alphabet on arrival.
+            // Padding ends a group, and whether it ends the input is the next character's news.
             if self.is_padded && byte == b'=' && held >= 2 {
                 self.pending = Some(Pending {
                     group: [self.quad[0], self.quad[1], self.quad[2]],
@@ -449,8 +387,7 @@ impl Decoder {
                 continue;
             }
 
-            // Anything the alphabet has no use for, padding included, is
-            // reported where a whole-input decode would report it.
+            // A foreign character, padding included, is reported where a whole-input decode would.
             if A::DECODE[byte as usize] == crate::alphabet::INVALID {
                 let position = self.total - 1;
                 return Err(self.refuse(
@@ -478,9 +415,7 @@ impl Decoder {
         Ok(written)
     }
 
-    /// Write a held group out, as the ending it has now been proven to be
-    ///
-    /// The characters sit one group back from the end of the input.
+    /// Write a held group out, as the ending it has now been shown to be
     fn settle(&mut self, pending: Pending, out: &mut [u8]) -> Result<usize, DecodeError> {
         let held = usize::from(pending.group_len);
         let offset = self.total - 4;
@@ -508,10 +443,7 @@ impl Decoder {
         })
     }
 
-    /// Count characters that arrive too late to change anything
-    ///
-    /// A held group was waiting for exactly one character to say the input
-    /// went on, and the first of these is it.
+    /// Count characters too late to change anything, the first of them ending a held group
     fn tally(&mut self, input: &[u8]) {
         let Some((&first, rest)) = input.split_first() else {
             return;
@@ -530,8 +462,7 @@ impl Decoder {
             0
         };
 
-        // Only the last three characters can leave a run of padding behind,
-        // and three is where the count stops.
+        // Only the last three characters can leave a run of padding behind.
         self.total += rest.len();
         for &byte in &rest[rest.len().saturating_sub(3)..] {
             self.run = if self.is_padded && byte == b'=' {
@@ -542,7 +473,7 @@ impl Decoder {
         }
     }
 
-    /// Name a refusal the way a whole-input decode would
+    /// Report a refusal the way a whole-input decode would
     fn name(&self, cause: Option<DecodeError>) -> Result<usize, DecodeError> {
         self.check_length()?;
         if self.run >= 3 {

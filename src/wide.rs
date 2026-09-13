@@ -2,8 +2,7 @@
 
 use crate::alphabet::INVALID;
 
-/// Gather 6 input bytes into the top of each 64-bit lane, most significant
-/// first, which is the order the bit stream runs in
+/// Gather 6 input bytes into the top of each 64-bit lane, most significant first
 pub(crate) const fn expand() -> [i8; 64] {
     let mut table = [0i8; 64];
     let mut lane = 0;
@@ -44,9 +43,7 @@ pub(crate) const fn gather_bytes() -> [i8; 64] {
     table
 }
 
-/// Every byte below 128 and what it is worth, in the half `vpermi2b` reads
-///
-/// A byte with no value keeps its top bit set, which is what the kernel tests.
+/// Every byte below 128 and what it is worth, a byte with no value keeping its top bit set
 pub(crate) const fn ascii_values(chars: &[u8; 64], half: usize) -> [i8; 64] {
     let mut table = [INVALID as i8; 64];
     let mut value = 0;
@@ -65,7 +62,7 @@ mod tests {
     use super::*;
     use crate::alphabet::{Alphabet, Standard, UrlSafe};
 
-    // `vpermb`: each result byte is the `data` byte its index's low 6 bits name
+    // `vpermb`: each result byte is the `data` byte its index's low 6 bits pick
     fn permute(index: &[i8; 64], data: &[u8; 64]) -> [u8; 64] {
         let mut out = [0u8; 64];
         for (slot, &which) in index.iter().enumerate() {
@@ -120,8 +117,7 @@ mod tests {
         let values = permute_pair(&low, chars, &high);
         let has_outsider = chars.iter().any(|&c| c >= 0x80) || values.iter().any(|&v| v >= 0x80);
 
-        // `vpmaddubsw` then `vpmaddwd`, which leave a lane holding its three
-        // bytes in the order 2, 1, 0
+        // `vpmaddubsw` then `vpmaddwd` leave a lane holding its three bytes in the order 2, 1, 0.
         let mut merged = [0u8; 64];
         for lane in 0..16 {
             let value = |slot: usize| values[lane * 4 + slot] as u32;
@@ -167,7 +163,6 @@ mod tests {
         round_trips::<Standard>();
     }
 
-    // the same, for the url-safe alphabet
     #[test]
     fn url_safe_block() {
         round_trips::<UrlSafe>();

@@ -1,9 +1,7 @@
 //! The sixty-four characters, and the two hundred and fifty-six bytes around them
 //!
-//! A vector path classifies a character by its two nibbles rather than by a
-//! table over every byte, so the bytes it lets through are the ones worth
-//! checking one at a time: every value a byte can take, at every offset of a
-//! block, against what the reference crate makes of it.
+//! A vector path classifies a character by its two nibbles, so every value a byte can
+//! take is checked at every offset of a block against the reference crate.
 
 mod common;
 
@@ -44,8 +42,7 @@ fn every_byte_is_accepted_exactly_where_the_reference_accepts_it() {
                 let theirs = entry.reference.decode(&encoded);
                 match (mine, theirs) {
                     (Ok(mine), Ok(theirs)) => {
-                        // The one byte outside the alphabet an encoding may
-                        // end with is the padding of a codec that has it
+                        // The one byte outside the alphabet an encoding may end with is padding
                         let is_takeable = is_in_alphabet(entry, byte)
                             || (entry.is_padded && byte == b'=' && position + 1 == clean.len());
                         assert!(is_takeable, "{name} took {byte:#04x} at {position}");
@@ -99,8 +96,7 @@ fn the_two_alphabets_differ_in_two_characters() {
     }
 }
 
-/// The two spellings of an encoding differ at exactly the characters the
-/// alphabets differ at, at every length
+/// The two spellings differ at exactly the characters the alphabets differ at
 #[test]
 fn the_two_spellings_differ_only_where_the_alphabets_do() {
     let mut rng = common::Rng::new(0xE1F0_C0DE);

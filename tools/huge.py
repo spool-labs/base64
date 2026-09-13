@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Turn a `huge` run into a table, in GiB/s.
 
-The sizes there cross out of L2, out of L3 and into memory, so the column
-that matters is the ratio against the rival that switches to non-temporal
-stores partway up.
+The sizes cross out of L2, out of L3 and into memory, so the column that matters is
+the ratio against the rival that switches to non-temporal stores partway up.
 """
 
 import collections

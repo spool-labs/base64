@@ -1,15 +1,8 @@
 //! Sizes that cross out of L2, out of L3, and into memory
 //!
-//! `base64-turbo` switches to non-temporal stores above 4 MiB, a threshold it
-//! measured on a 9 MiB last level cache. A part with a much larger one reaches
-//! that threshold while the working set still fits, so this walks the sizes on
-//! either side of it.
-//!
-//! Criterion reuses one output buffer across iterations, so the destination is
-//! warm in a way a one-shot caller's would not be. That is the same harness the
-//! other benches use, and it is the condition under which bypassing the cache
-//! is worst, so read these as the warm-destination case rather than the only
-//! one.
+//! `base64-turbo` switches to non-temporal stores above 4 MiB, so this walks the sizes
+//! either side of that. Criterion reuses one output buffer, so read these rows as the
+//! warm-destination case.
 
 use std::hint::black_box;
 

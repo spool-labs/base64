@@ -9,9 +9,7 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
     if groups == 0 {
         return 0;
     }
-    // A vector stage leaves at most three groups, and the paired walk below
-    // spends two divisions working out how far to go. Three groups is fewer
-    // instructions done than counted.
+    // A vector stage leaves at most three groups, fewer than the paired walk's setup costs.
     if groups < 4 {
         let mut at = 0;
         while at < groups && at * 3 + 3 <= input.len() && at * 4 + 4 <= out.len() {
@@ -26,8 +24,7 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
     debug_assert!(groups * 3 <= taken && groups * 4 <= room);
     let mut done = 0;
 
-    // Two groups at a time, because 6 bytes fit one word and the 8 characters
-    // they spell fit another. The clamps never fire.
+    // Two groups at a time: 6 bytes fit one word and the 8 characters they spell another.
     let pairs = groups / 2;
     for (group, slot) in input[..(pairs * 6).min(taken)]
         .as_chunks::<6>()
@@ -44,8 +41,7 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
         done += 2;
     }
 
-    // A pair the clamps cut short would leave the odd group at the wrong
-    // offset, so it only runs where every pair landed.
+    // The odd group would land at the wrong offset unless every pair was written.
     if done == pairs * 2 {
         let (read, written) = (done * 3, done * 4);
         let rest = groups - done;
@@ -79,9 +75,7 @@ pub(crate) fn encode_group<A: Alphabet>(group: [u8; 3], out: &mut [u8]) {
     }
 }
 
-/// Convert the one or two bytes a group short of three, with padding if asked
-///
-/// Returns how many characters were written. `out` must have room for them.
+/// Convert the one or two bytes a group short of three, padding if asked, into room `out` has
 pub(crate) fn encode_rest<A: Alphabet>(input: &[u8], out: &mut [u8], is_padded: bool) -> usize {
     let chars = A::ENCODE;
     // Matched as a pattern, so nothing needs a length check.
@@ -111,10 +105,7 @@ pub(crate) fn encode_rest<A: Alphabet>(input: &[u8], out: &mut [u8], is_padded: 
     count
 }
 
-/// Convert up to `quads` whole 4-character groups, returning how many
-///
-/// Stops at the first group holding a character outside the alphabet rather
-/// than reporting it, so a vector path can hand a suspect block over.
+/// Convert up to `quads` whole 4-character groups, returning how many, stopping at a foreign one
 pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usize) -> usize {
     if quads == 0 {
         return 0;
@@ -151,7 +142,7 @@ pub(crate) fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quads: usiz
     done
 }
 
-/// Name the first character of `input` that is outside the alphabet
+/// Report the first character of `input` that is outside the alphabet
 pub(crate) fn find_invalid<A: Alphabet>(input: &[u8], offset: usize) -> DecodeError {
     let values = A::DECODE;
     for (index, &byte) in input.iter().enumerate() {
@@ -168,9 +159,7 @@ pub(crate) fn find_invalid<A: Alphabet>(input: &[u8], offset: usize) -> DecodeEr
     }
 }
 
-/// Convert the two or three characters a group short of four
-///
-/// Returns how many bytes were written. `out` must have room for them.
+/// Convert the two or three characters a group short of four, into room `out` has
 pub(crate) fn decode_rest<A: Alphabet>(
     input: &[u8],
     out: &mut [u8],
@@ -184,8 +173,7 @@ pub(crate) fn decode_rest<A: Alphabet>(
             if (high | low) & 0x80 != 0 {
                 return Err(find_invalid::<A>(input, offset));
             }
-            // These bits have no room in the output, so two spellings would
-            // otherwise decode alike.
+            // These bits have no room in the output, so two spellings would decode alike.
             if low & 0x0F != 0 {
                 return Err(DecodeError::InvalidLastSymbol {
                     position: offset + 1,
@@ -214,8 +202,7 @@ pub(crate) fn decode_rest<A: Alphabet>(
             out[1] = (middle << 4) | (low >> 2);
             Ok(2)
         }
-        // Nothing is left over: a whole group goes to the bulk stage, and a
-        // single character is a length every caller has already refused.
+        // Nothing is left: whole groups went to the bulk stage, a lone character was refused.
         rest => {
             debug_assert!(rest.is_empty(), "a whole group reached the tail");
             Ok(0)
@@ -228,8 +215,7 @@ mod tests {
     use super::*;
     use crate::alphabet::Standard;
 
-    // the walk that covers up to three groups says how many it spelled, not
-    // how many it was asked for
+    // the short walk says how many groups it spelled, not how many it was asked for
     #[test]
     fn a_short_walk_counts_what_it_spelled() {
         let input = [1u8; 9];

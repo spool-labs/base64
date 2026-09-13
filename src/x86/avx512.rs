@@ -1,32 +1,24 @@
 //! The AVX-512 codec, where VBMI is present
 //!
-//! `vpermb` spells a value in one lookup and `vpmultishiftqb` splits a group
-//! in one instruction, so a block is a load, three instructions and a store.
-//! Decoding indexes the whole of ASCII with `vpermi2b`. Masked loads and
-//! stores cover the last partial block, so nothing is left for the walk.
+//! `vpermb` spells a value in one lookup and `vpmultishiftqb` splits a group in one
+//! instruction. Masked loads and stores cover the last partial block, so the walk gets nothing.
 
 use core::arch::x86_64::*;
 
 use crate::alphabet::Alphabet;
 use crate::wide::{expand, field_starts, gather_bytes};
 
-// An explicit import shadows the glob above, so the kernel below reads the
-// same whichever of the two is in scope.
+// The explicit import shadows the glob above, so the kernel reads the same either way.
 #[cfg(miri)]
 use shims::{_mm512_multishift_epi64_epi8, _mm512_permutexvar_epi8};
 
-/// Scalar models of the instructions the interpreter has no version of
-///
-/// Miri executes most of AVX-512 but not the byte permutes, so under it these
-/// stand in, written from what the manual says each instruction does. They are
-/// how the kernel's addressing is checked on a machine without VBMI, and they
-/// are compiled only under `cfg(miri)`.
+/// Scalar models of the byte permutes the interpreter has no version of
 #[cfg(miri)]
 mod shims {
     use core::arch::x86_64::__m512i;
     use core::mem::transmute;
 
-    /// `vpermb`: every result byte is the `data` byte its index's low 6 bits name
+    /// `vpermb`: every result byte is the `data` byte its index's low 6 bits pick
     #[inline]
     pub unsafe fn _mm512_permutexvar_epi8(index: __m512i, data: __m512i) -> __m512i {
         // SAFETY: both are 64 bytes, and so is the array either becomes.
@@ -41,8 +33,7 @@ mod shims {
         }
     }
 
-    /// `vpmultishiftqb`: every result byte is 8 bits of its own 64-bit lane,
-    /// starting where the low 6 bits of its control byte say, wrapping at the top
+    /// `vpmultishiftqb`: every result byte is 8 bits of its own 64-bit lane, wrapping at the top
     #[inline]
     pub unsafe fn _mm512_multishift_epi64_epi8(control: __m512i, data: __m512i) -> __m512i {
         // SAFETY: 64 bytes either way, whether read as bytes or as lanes.
@@ -64,12 +55,7 @@ mod shims {
 /// Groups a block converts
 const BLOCK_GROUPS: usize = 16;
 
-/// Blocks decoded between two readings of the bad character accumulator
-///
-/// The run is written out rather than looped, so this cannot change alone
-///
-/// A constant, so a run unrolls. Reading the accumulator moves a mask register
-/// into a general one and branches, which is a barrier between blocks.
+/// Blocks decoded between two readings of the bad character accumulator, unrolled by hand below
 const CHECK_EVERY: usize = 4;
 const _: () = assert!(CHECK_EVERY == 4);
 
@@ -91,10 +77,7 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet>(
     if groups == 0 || groups * 3 > input.len() || groups * 4 > out.len() {
         return 0;
     }
-    // SAFETY: every block converts groups `start` through `start + n` with
-    // `start + n <= groups`, reading `n * 3` bytes and writing `n * 4`, and
-    // the caller has room for `groups` of each. The last block narrows both
-    // its load and its store to however many groups are left.
+    // SAFETY: every block stays inside both buffers, the last masking its load and its store.
     unsafe {
         let alphabet = _mm512_loadu_si512(A::ENCODE.as_ptr().cast());
         let expand = _mm512_loadu_si512(EXPAND.as_ptr().cast());
@@ -102,18 +85,14 @@ pub(crate) unsafe fn encode_bulk<A: Alphabet>(
         let source = input.as_ptr();
         let destination = out.as_mut_ptr();
 
-        // A whole block reads a constant 48 bytes and writes a constant 64, so
-        // its load mask is lifted out of the loop and its store needs none. A
-        // mask derived from a varying block size costs two shifts and two
-        // moves into mask registers per iteration, and stops the unrolling.
+        // A whole block reads 48 bytes and writes 64, so its load mask lifts out of the loop.
         let whole = mask_for(BLOCK_GROUPS * 3);
         let mut done = 0;
         while groups - done >= BLOCK_GROUPS {
             let data = _mm512_maskz_loadu_epi8(whole, source.add(done * 3).cast());
             let spread = _mm512_permutexvar_epi8(expand, data);
             let fields = _mm512_multishift_epi64_epi8(starts, spread);
-            // Only the low six bits of an index are read, so the two bits
-            // above each field never need masking off.
+            // Only the low six bits of an index are read, so the bits above need no masking.
             let spelled = _mm512_permutexvar_epi8(fields, alphabet);
             _mm512_storeu_si512(destination.add(done * 4).cast(), spelled);
             done += BLOCK_GROUPS;
@@ -155,11 +134,8 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
     if quads == 0 || quads * 4 > input.len() || quads * 3 > out.len() {
         return 0;
     }
-    // SAFETY: a whole block reads the 64 characters and writes the 48 bytes of
-    // groups `done` through `done + 16`, which the caller has room for. The
-    // wide store is only reached where at least 6 groups follow, whose own
-    // store rewrites the 16 bytes it overhangs by. The last block narrows
-    // both ends with masks.
+    // SAFETY: every block stays inside both buffers, the wide store's 16 byte overhang is
+    // rewritten by the next store, and the last block masks both ends.
     unsafe {
         let values_low = _mm512_loadu_si512(A::ASCII_LOW.as_ptr().cast());
         let values_high = _mm512_loadu_si512(A::ASCII_HIGH.as_ptr().cast());
@@ -168,14 +144,11 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
         let source = input.as_ptr();
         let destination = out.as_mut_ptr();
 
-        // A character outside the alphabet sets bit 7 of either the character
-        // or the value the table gave back, so gathering both is one
-        // three-input OR and reading it is one test per run.
+        // A foreign character sets bit 7 of itself or of its value, so one OR gathers both.
         let mut bad = _mm512_setzero_si512();
         let mut done = 0;
 
-        /// The arithmetic of one block, on characters already loaded, leaving
-        /// them and their values for a caller folding several at once
+        /// The arithmetic of one block, on characters already loaded
         macro_rules! convert_loaded {
             ($chars:expr) => {{
                 let chars = $chars;
@@ -198,14 +171,9 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
             }};
         }
 
-        // 48 bytes is an awkward width to store and 64 is not. Where 6 or more
-        // groups follow, that is 18 bytes against the 16 this overhangs by,
-        // the next store rewrites the overhang and the width can be ignored.
+        // 48 is an awkward store width, so with 6 groups behind the next store covers the overhang.
         while quads - done >= CHECK_EVERY * BLOCK_GROUPS + 6 {
-            // Every load of the run issued before any of its arithmetic, so
-            // four chains are in flight rather than each waiting on the one
-            // before it. This is what the AVX2 encoder does for the same
-            // reason.
+            // Every load of the run issues before any arithmetic, so four chains are in flight.
             let mut raw = [_mm512_setzero_si512(); CHECK_EVERY];
             for (step, slot) in raw.iter_mut().enumerate() {
                 *slot = _mm512_loadu_si512(source.add((done + step * BLOCK_GROUPS) * 4).cast());
@@ -222,8 +190,7 @@ pub(crate) unsafe fn decode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], quad
                 fourth,
             );
 
-            // A tree rather than a chain: none of these waits on the one
-            // before it, and only the last waits on `bad`.
+            // A tree rather than a chain, so only the last of these waits on `bad`.
             let left = _mm512_ternarylogic_epi32::<0xFE>(first_chars, first_values, second_chars);
             let right = _mm512_ternarylogic_epi32::<0xFE>(second_values, third_chars, third_values);
             let rest = _mm512_ternarylogic_epi32::<0xFE>(fourth_chars, fourth_values, left);

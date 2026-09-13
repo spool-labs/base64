@@ -1,14 +1,8 @@
 //! Every path this machine can run, pinned in turn
 //!
-//! Dispatch picks the widest path the processor reports, so on any one
-//! machine the rest of the suite only ever exercises that one. Here each
-//! path the machine can actually execute is pinned and put through the same
-//! conversions, and every path has to produce the same characters and the
-//! same bytes as the portable walk.
-//!
-//! Pinning is a property of the whole process and the harness runs tests in
-//! parallel, so every test here holds `PIN` for as long as it has a path
-//! pinned.
+//! Dispatch only ever picks one path per machine, so each path the machine can run is
+//! pinned here and held against the portable walk. Pinning is process-wide and the
+//! harness runs tests in parallel, so every test holds `PIN` while it has one pinned.
 
 #![cfg(all(target_arch = "x86_64", feature = "internals"))]
 
@@ -25,11 +19,7 @@ use tape_base64::{Codec, DecodeError, STANDARD_NO_PAD, URL_SAFE_NO_PAD};
 /// Held for as long as a path is pinned, so two tests never pin at once
 static PIN: Mutex<()> = Mutex::new(());
 
-/// Lengths that put every block size against every remainder, and a few long
-/// enough that the loop runs many times
-///
-/// Under Miri every block is interpreted rather than executed, so the sweep is
-/// cut to the block boundaries and their neighbours.
+/// Lengths that put every block size against every remainder, cut to boundaries under Miri
 fn lengths() -> Vec<usize> {
     if !cfg!(miri) {
         let mut lengths: Vec<usize> = (0..=512).collect();
@@ -65,10 +55,7 @@ fn pin(chosen: u8) {
     unsafe { testing::force(chosen) };
 }
 
-/// The wide path is chosen exactly where the processor reports what it uses
-///
-/// `available` reads cpuid itself, so its answer is held against the standard
-/// library's detection of the same three features.
+/// The wide path is chosen exactly where the processor reports the three features it uses
 #[test]
 fn the_wide_path_is_taken_only_where_vbmi_is() {
     let reported = is_x86_feature_detected!("avx512f")
@@ -148,8 +135,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
         }
     }
 
-    // Every byte outside the alphabet has to be refused on every path, at
-    // the offset it sits at, wherever in a block that falls
+    // Every byte outside the alphabet has to be refused on every path, at the offset it sits at
     for &(path_name, path) in &paths {
         pin(path);
         for position in thinned(256, 11) {
@@ -167,8 +153,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
         }
     }
 
-    // A refusal has to be the same refusal on every path: the same reason, at
-    // the same offset, and the same bytes written before it
+    // A refusal has to be the same on every path: same reason, same offset, same bytes before it
     let mut rng = Rng::new(0x4A3B_2C1D);
     let mut source = vec![0u8; if cfg!(miri) { 96 } else { 300 }];
     rng.fill(&mut source);
@@ -245,22 +230,7 @@ fn every_path_accepts_exactly_the_alphabet() {
     pin(widest);
 }
 
-/// Convert out of a buffer that ends exactly where the input does
-///
-/// The x86 encoder has one block that reads four bytes before itself and four
-/// past its end, because one load is cheaper than two. It is only supposed to
-/// be reached where those bytes are inside the buffer. If the bound is
-/// counted over the first block of an unrolled run rather than the whole run,
-/// the last block of the run reads past the input, and only for an input
-/// whose length is a multiple of three, because that is the case where the
-/// groups end exactly at the end.
-///
-/// Nothing here can observe a read past the end on its own. Run under a tool
-/// that can:
-///
-/// ```sh
-/// valgrind --error-exitcode=9 target/release/deps/forced-*
-/// ```
+/// Buffers ending exactly where the input does, so an over-read shows under valgrind
 #[test]
 fn lengths_whose_groups_end_at_the_buffer() {
     let _pinned = pinned();
@@ -272,8 +242,7 @@ fn lengths_whose_groups_end_at_the_buffer() {
             continue;
         }
         pin(path);
-        // Every length that is a whole number of groups, across the sizes
-        // where the unrolled run starts and stops being used
+        // Every length that is a whole number of groups, where the unrolled run starts and stops
         for groups in (1..600).step_by(if cfg!(miri) { 11 } else { 1 }) {
             let len = groups * 3;
             let mut input = vec![0u8; len];
@@ -307,13 +276,11 @@ fn the_streaming_store_writes_what_the_walk_would() {
         return;
     }
     pin(testing::AVX2);
-    // Far below any real cache, so these lengths reach the streaming store
-    // rather than needing a buffer the size of a last level cache to get there.
+    // Far below any real cache, so these lengths reach the streaming store.
     testing::force_stream_floor(64);
 
     let mut rng = Rng::new(0x5EED_1234_ABCD_0001);
-    // Past the size below which the dispatcher will not even ask, which the
-    // kernel lowers under Miri so that an interpreted run can reach it.
+    // Past the size below which the dispatcher will not ask, lowered under Miri.
     let candidate = if cfg!(miri) { 1 << 10 } else { 1 << 16 };
     // Enough lengths to cover every block boundary the run can end on.
     let sweep = (candidate..candidate + 48).step_by(if cfg!(miri) { 7 } else { 1 });

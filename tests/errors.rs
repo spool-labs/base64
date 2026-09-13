@@ -2,8 +2,7 @@
 
 use tape_base64::{DecodeError, EncodeError, STANDARD, STANDARD_NO_PAD, URL_SAFE};
 
-/// The offset reported has to be the offset of the byte, wherever in the
-/// input it falls, including well inside a block the vector stage took
+/// The offset reported is the offset of the byte, including inside a block the vector stage took
 #[test]
 fn invalid_byte_is_found_at_its_own_offset() {
     let mut encoded = [b'A'; 256];
@@ -98,8 +97,7 @@ fn padding_in_the_middle() {
     );
 }
 
-/// A short group's last character holds bits the output has no room for,
-/// and they have to be zero or two spellings would decode alike
+/// A short group's last character holds spare bits, which have to be zero
 #[test]
 fn trailing_bits_have_to_be_clear() {
     let mut out = [0u8; 8];
@@ -152,16 +150,13 @@ fn url_safe_refuses_the_other_alphabet() {
     assert_eq!(URL_SAFE.decode(b"----", &mut out).unwrap(), 3);
 }
 
-/// An input whose encoding would not fit in a `usize` is refused rather than
-/// wrapping around to a small number
+/// An input whose encoding would not fit in a `usize` is refused rather than wrapping
 #[test]
 fn lengths_whose_encoding_has_no_length() {
-    // No allocation is involved: `encoded_len` is asked about a length, not
-    // given a buffer of one.
+    // No allocation: `encoded_len` is asked about a length, not given a buffer.
     assert_eq!(STANDARD.encoded_len(usize::MAX), None);
     assert_eq!(STANDARD_NO_PAD.encoded_len(usize::MAX), None);
-    // Two thirds of the range still has an encoding, and a length is all
-    // this is being asked for
+    // Two thirds of the range still has an encoding, and a length is all this asks for
     assert!(STANDARD.encoded_len(usize::MAX / 2).is_some());
 
     // The largest input that does fit, and the first that does not
