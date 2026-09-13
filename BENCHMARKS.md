@@ -30,7 +30,7 @@ the scalar one, and the gap between those two rows is the cost of that.
 
 ## Reproducing
 
-The benchmarks are their own crate, so that the published one carries neither
+The benchmarks are their own crate, so that the published one includes neither
 them nor the crates they measure against.
 
 ```sh
@@ -86,7 +86,7 @@ Six things to know before reading a number:
 | **Turin** | AMD EPYC 9B45, 8 vCPU (GCP c4d-standard-8), Debian 12, rustc 1.98, AVX-512 with VBMI |
 
 A fourth, an Intel Xeon Platinum 8481C (GCP c3, Sapphire Rapids, AVX-512 with
-VBMI), was used for correctness only and carries no table here: its run
+VBMI), was used for correctness only and has no table here: its run
 predates the AVX-512 decode rewrite and its decode figures are superseded.
 It confirmed the wide path on a second vendor's implementation of AVX-512.
 
@@ -266,7 +266,7 @@ it at 13.7 MiB and `base64-turbo` at 4 MiB.
 | 64 | 16.04 | 15.43 | 8.42 | **1.04x** |
 | 128 | 14.71 | 14.88 | 8.45 | **0.99x** |
 
-## What was tried and did not work
+## What did not work
 
 Kept here because a negative result costs the same to produce as a positive
 one and is lost more easily.

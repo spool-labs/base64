@@ -1,6 +1,6 @@
 //! Padding, the lengths it makes possible, and the bits a short group cannot hold
 //!
-//! A group of two or three characters carries more bits than the bytes it
+//! A group of two or three characters holds more bits than the bytes it
 //! decodes to have room for. The spare ones have to be zero, or the same bytes
 //! would have two spellings, so every one of the sixty-four values the last
 //! character can take is put through both short groups here.
@@ -27,7 +27,7 @@ fn padding(entry: &Compared, count: usize) -> Vec<u8> {
     }
 }
 
-/// A two-character group carries four bits the single byte cannot hold, and a
+/// A two-character group holds four bits the single byte cannot hold, and a
 /// three-character group two, and all of them have to be zero
 #[test]
 fn every_trailing_bit_pattern_is_judged_like_the_reference() {

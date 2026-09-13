@@ -6,7 +6,7 @@
     tools/fill.py --marker "HUGE RESULTS" --tool huge a.txt b.txt
 
 More than one run is read as a median of them, cell by cell. A note is kept
-if the block already carries one, since it says which machine and how many
+if the block already has one, since it says which machine and how many
 runs the numbers are.
 """
 

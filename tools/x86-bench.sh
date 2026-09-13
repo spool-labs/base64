@@ -113,10 +113,10 @@ case "$CMD" in
     if [ "$CLOUD" = gcp ]; then
       gcloud compute instances describe "$NAME" --zone "$GC_ZONE" \
         --format="value(name,status,machineType.basename())" 2>/dev/null \
-        && echo "==> still up, and still billing" || echo "==> no instance named $NAME"
+        && echo "==> still up, and still billing" || echo "==> no instance called $NAME"
     else
       hcloud server describe "$NAME" -o format='{{.Name}} {{.Status}} {{.ServerType.Name}}' 2>/dev/null \
-        && echo "==> still up, and still billing" || echo "==> no server named $NAME"
+        && echo "==> still up, and still billing" || echo "==> no server called $NAME"
     fi
     ;;
 

@@ -9,7 +9,7 @@ repository = "https://github.com/spool-labs/base64"
 keywords = ["base64", "simd", "neon", "avx2", "encoding"]
 categories = ["encoding", "no-std"]
 
-exclude = ["BENCHMARKS.md", "bench", "tools"]
+exclude = ["BENCHMARKS.md", "bench", "tools", ".github"]
 
 [lints.rust.unexpected_cfgs]
 level = "warn"

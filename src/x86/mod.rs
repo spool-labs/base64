@@ -27,7 +27,7 @@ pub(crate) fn encode_bulk<A: Alphabet>(input: &[u8], out: &mut [u8], groups: usi
         Path::Wide => unsafe { avx512::encode_bulk::<A>(input, out, groups) },
         Path::Avx2 => {
             // Asked here rather than inside the kernel, so the ordinary form
-            // carries neither the test nor a branch that would give it a frame
+            // has neither the test nor a branch that would give it a frame
             // it does not otherwise need.
             let is_streaming = input.len() >= STREAM_CANDIDATE
                 && input.len() >= dispatch::stream_floor()

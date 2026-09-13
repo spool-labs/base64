@@ -166,7 +166,7 @@ unsafe fn encode_narrow(table: &uint8x16x4_t, source: *const u8, destination: *m
 ///
 /// # Safety
 ///
-/// Always sound: the intrinsic only names a target feature aarch64 always has.
+/// Always sound: the intrinsic only asks for a target feature aarch64 always has.
 #[inline(always)]
 unsafe fn widen(bad: uint8x8_t) -> uint8x16_t {
     // SAFETY: NEON is the baseline on this architecture.
@@ -263,7 +263,7 @@ unsafe fn encode_short(table: &uint8x16x4_t, source: *const u8, destination: *mu
     unsafe {
         let front = vld1_u8(source);
         // Read as a value rather than through `vld1_dup_u32`, whose pointer is
-        // a `*const u32` the source is under no obligation to be aligned for.
+        // a `*const u32` the source need not be aligned for.
         let back = vreinterpret_u8_u32(vdup_n_u32(source.add(8).cast::<u32>().read_unaligned()));
         let gathered = vqtbl1q_u8(vcombine_u8(front, back), vld1q_u8(GATHER.as_ptr()));
 

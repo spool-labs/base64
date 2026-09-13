@@ -56,7 +56,7 @@ let written = decoder.finish(&mut out[written..])?;
 
 The pieces convert to exactly what the pieces joined convert to, refusals
 included: a streamed decode refuses where, and only where, one whole-input
-call would, naming the same character at the same offset. What was converted
+call would, pointing at the same character at the same offset. What was converted
 before a refusal stays converted. An encode push that finds the buffer short
 of the whole piece refuses instead of converting part of it, so a refusal
 consumes nothing.
@@ -219,11 +219,11 @@ Decoding is strict, and says where it went wrong:
 
 The vector stage never reports these. It stops before any block holding a
 character outside the alphabet and lets the portable walk find the offset,
-so the cost of naming an error is paid only when there is one.
+so the cost of locating an error is paid only when there is one.
 
 ## Benchmarks
 
-See [BENCHMARKS.md](BENCHMARKS.md), which carries the numbers, the machine,
+See [BENCHMARKS.md](BENCHMARKS.md), which holds the numbers, the machine,
 and how to reproduce them.
 
 ## Attribution

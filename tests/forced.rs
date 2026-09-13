@@ -197,7 +197,7 @@ fn every_path_this_machine_has_agrees_with_the_portable_one() {
                     let found = codec.decode(&corrupted, &mut bytes);
                     assert_eq!(
                         found, expected,
-                        "{path_name} judged {name} at offset {position} differently"
+                        "{path_name} decided {name} at offset {position} differently"
                     );
                     if let Ok(written) = found {
                         assert_eq!(bytes[..written], walked[..written], "{path_name} {name}");
@@ -226,7 +226,7 @@ fn every_path_accepts_exactly_the_alphabet() {
     for path in paths {
         pin(path);
         for byte in 0..=u8::MAX {
-            // Deep inside a block, so the vector stage is the one judging it
+            // Deep inside a block, so the vector stage is the one deciding it
             let mut encoded = [b'A'; 64];
             encoded[33] = byte;
             let mut out = [0u8; 48];

@@ -117,7 +117,7 @@ impl Narrow {
 /// Convert `groups` whole groups, returning how many were converted
 ///
 /// With `STREAM` the whole blocks write past the cache rather than through it.
-/// The caller decides that, so the ordinary form carries none of it.
+/// The caller decides that, so the ordinary form has none of it.
 ///
 /// # Safety
 ///
@@ -272,9 +272,9 @@ unsafe fn put<const STREAM: bool>(destination: *mut u8, chars: __m256i) {
 ///
 /// Both multipliers are a power of two in each 16 bit lane, and LLVM rewrites
 /// such a multiply into two shifts and a blend. That is four more uops a
-/// block, all of them on the two ports the shuffles already want. Naming the
-/// instruction keeps it, and unlike an opaque constant it is not a barrier, so
-/// a short buffer does not pay to materialize what it barely uses.
+/// block, all of them on the two ports the shuffles already want. Writing the
+/// instruction as assembly keeps it, and unlike an opaque constant it is not a
+/// barrier, so a short buffer does not pay to materialize what it barely uses.
 ///
 /// # Safety
 ///
@@ -338,7 +338,7 @@ unsafe fn mul_narrow(value: __m128i, multiplier: __m128i) -> __m128i {
 /// written as arithmetic. Two fields want right shifts of 10 and 6: multiply
 /// by 1 and by 16, then shift everything right by 10, and the leftovers fall
 /// off either end unmasked. The other two want left shifts of 4 and 8, which
-/// needs the mask first because nothing carries their neighbours away.
+/// needs the mask first because nothing moves their neighbours away.
 macro_rules! split_bits {
     ($gathered:expr, $align:expr, $field:expr, $and:ident, $mul:ident, $shr:ident, $or:ident,
      $set:ident) => {{

@@ -54,7 +54,7 @@ fn streamed_decode(codec: Codec, pieces: &[&[u8]]) -> Result<Vec<u8>, DecodeErro
 
     let mut spot = [0u8; 4];
     let written = decoder.finish(&mut spot)?;
-    assert!(!refused, "a refusal names itself again at the end");
+    assert!(!refused, "a refusal is reported again at the end");
     out.extend_from_slice(&spot[..written]);
     Ok(out)
 }

@@ -1,7 +1,7 @@
 //! Where the time goes at sizes too small for the loop to matter
 //!
 //! Four rows at each length. `nothing` is an empty timed body, which every
-//! other row carries. `copy` moves the same bytes for scale. `kernel` is the
+//! other row includes. `copy` moves the same bytes for scale. `kernel` is the
 //! vector stage alone, and `codec` is the whole public call.
 
 use std::hint::black_box;

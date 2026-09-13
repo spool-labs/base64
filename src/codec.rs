@@ -29,7 +29,7 @@ pub(crate) fn encode_groups<A: Alphabet>(input: &[u8], out: &mut [u8], groups: u
     (written + done * 4).min(room)
 }
 
-/// Write the decoding of `input`, which carries no padding, into `out`
+/// Write the decoding of `input`, which has no padding, into `out`
 pub(crate) fn decode<A: Alphabet>(
     input: &[u8],
     out: &mut [u8],

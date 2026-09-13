@@ -40,7 +40,7 @@ pub enum DecodeError {
         /// The length that was refused
         length: usize,
     },
-    /// The final character carries bits that the decoded output cannot hold
+    /// The final character has bits that the decoded output cannot hold
     InvalidLastSymbol {
         /// Offset of the character in the input
         position: usize,

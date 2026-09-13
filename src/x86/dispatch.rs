@@ -42,10 +42,10 @@ pub(crate) fn path() -> Path {
 fn settle() -> Path {
     let chosen = available();
     CHOSEN.store(chosen, Ordering::Relaxed);
-    named(chosen)
+    path_of(chosen)
 }
 
-fn named(chosen: u8) -> Path {
+fn path_of(chosen: u8) -> Path {
     match chosen {
         WIDE => Path::Wide,
         AVX2 => Path::Avx2,

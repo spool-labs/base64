@@ -34,7 +34,7 @@ fn exactly_the_alphabet_is_accepted() {
     }
 }
 
-/// A character count of one past a group carries six bits, which is not a byte
+/// A character count of one past a group holds six bits, which is not a byte
 #[test]
 fn lengths_no_encoder_produces() {
     let mut out = [0u8; 256];
@@ -71,7 +71,7 @@ fn padding_is_required_or_refused() {
     );
 }
 
-/// Three characters of padding leave one character, which carries no byte
+/// Three characters of padding leave one character, which holds no byte
 #[test]
 fn too_much_padding() {
     let mut out = [0u8; 8];
@@ -98,7 +98,7 @@ fn padding_in_the_middle() {
     );
 }
 
-/// A short group's last character carries bits the output has no room for,
+/// A short group's last character holds bits the output has no room for,
 /// and they have to be zero or two spellings would decode alike
 #[test]
 fn trailing_bits_have_to_be_clear() {

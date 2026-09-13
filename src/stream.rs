@@ -16,7 +16,7 @@ use crate::{Codec, Kind};
 pub struct Encoder {
     kind: Kind,
     is_padded: bool,
-    /// Bytes carried until the group they started is whole
+    /// Bytes held until the group they started is whole
     held: [u8; 2],
     held_len: u8,
 }
@@ -157,7 +157,7 @@ pub struct Decoder {
 
 /// Convert one whole quad into the room at the start of `out`
 ///
-/// Refuses the first character of the quad outside the alphabet, named at
+/// Refuses the first character of the quad outside the alphabet, reported at
 /// `base` plus its place. A quad padded at its end never reaches here, since
 /// only what follows can say whether it was an ending.
 fn take_quad<A: Alphabet>(
@@ -165,7 +165,7 @@ fn take_quad<A: Alphabet>(
     base: usize,
     out: &mut [u8],
 ) -> Result<usize, DecodeError> {
-    // The walk stops on a character outside the alphabet without naming it,
+    // The walk stops on a character outside the alphabet without reporting it,
     // which is the same hand-off a vector block makes.
     if scalar::decode_bulk::<A>(quad, out, 1) == 0 {
         return Err(scalar::find_invalid::<A>(quad, base));
@@ -175,7 +175,7 @@ fn take_quad<A: Alphabet>(
 
 /// Refuse a buffer short of the bytes a held group of `chars` characters owes
 ///
-/// Two characters carry one byte and three carry two, which is what a
+/// Two characters hold one byte and three hold two, which is what a
 /// whole-input decode asks for before it reads anything.
 fn room_for(chars: usize, out: &[u8]) -> Result<(), DecodeError> {
     let needed = chars.saturating_sub(1);
@@ -189,7 +189,7 @@ fn room_for(chars: usize, out: &[u8]) -> Result<(), DecodeError> {
 struct Pending {
     /// The characters before the padding
     group: [u8; 3],
-    /// How many of them carry bits, two or three
+    /// How many of them hold bits, two or three
     group_len: u8,
     /// Where the padding starts, counted over the whole input
     pad: usize,
@@ -206,7 +206,7 @@ enum State {
         /// Where the ending's first padding character sits
         pad: usize,
     },
-    /// A refusal became certain, and only its naming waits for the end
+    /// A refusal became certain, and only its report waits for the end
     Refused(Option<DecodeError>),
 }
 
@@ -220,7 +220,7 @@ impl Decoder {
     /// A buffer short of that bound is refused before anything is read, so a
     /// refusal consumes nothing and the decoder stands where it stood. Once a
     /// refusal or a padded ending has been seen, every later push returns
-    /// `Ok(0)` while still counting the characters, and the refusal is named
+    /// `Ok(0)` while still counting the characters, and the refusal is reported
     /// again by `finish`.
     pub fn push(&mut self, input: &[u8], out: &mut [u8]) -> Result<usize, DecodeError> {
         match self.state {
@@ -266,7 +266,7 @@ impl Decoder {
                 };
                 room_for(owed, out)?;
                 // A group held over with padding aboard is the ending the
-                // input stopped on, which nothing has judged until now.
+                // input stopped on, which nothing has checked until now.
                 if let Some(pending) = self.pending.take() {
                     return self.settle(pending, out);
                 }
@@ -366,7 +366,7 @@ impl Decoder {
         }
 
         // Whole quads from here convert in runs, at kernel speed. A run
-        // stops at the first character no encoding carries, which for
+        // stops at the first character no encoding holds, which for
         // padding is not yet a refusal: only a group's own conversion knows
         // whether an ending stood there.
         // A run holding padding is refused whole and handed back, so a piece
@@ -407,7 +407,7 @@ impl Decoder {
             }
         }
 
-        // What is left is short of a group, or carries the padding of an
+        // What is left is short of a group, or holds the padding of an
         // ending. Neither commits until the input does.
         for index in consumed..input.len() {
             let byte = input[index];
@@ -450,7 +450,7 @@ impl Decoder {
             }
 
             // Anything the alphabet has no use for, padding included, is
-            // named where a whole-input decode would name it.
+            // reported where a whole-input decode would report it.
             if A::DECODE[byte as usize] == crate::alphabet::INVALID {
                 let position = self.total - 1;
                 return Err(self.refuse(

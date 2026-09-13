@@ -28,7 +28,7 @@ fn is_in_alphabet(entry: &common::Compared, byte: u8) -> bool {
     entry.alphabet.contains(&byte)
 }
 
-/// Every byte, at every offset of a block, judged the way the reference does
+/// Every byte, at every offset of a block, classified the way the reference does
 #[test]
 fn every_byte_is_accepted_exactly_where_the_reference_accepts_it() {
     for entry in &CODECS {

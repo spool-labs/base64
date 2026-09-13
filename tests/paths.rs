@@ -91,7 +91,7 @@ fn decode_stages_agree() {
 }
 
 /// A character outside the alphabet is never inside what the vector stage
-/// claims, wherever it falls, and the codec still names its offset
+/// claims, wherever it falls, and the codec still reports its offset
 #[test]
 fn the_vector_stage_never_claims_a_bad_character() {
     for position in 0..512 {

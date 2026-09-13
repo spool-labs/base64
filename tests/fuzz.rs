@@ -17,7 +17,7 @@ const SOUP: [u8; 32] = [
 ];
 
 /// Hold one decode against the reference, on value as well as validity
-fn judge(entry: &Compared, encoded: &[u8]) {
+fn check_decode(entry: &Compared, encoded: &[u8]) {
     let mine = common::decode_to_vec(entry.codec, encoded);
     let theirs = entry.reference.decode(encoded);
     if let Ok(mine) = &mine {
@@ -76,7 +76,7 @@ fn random_bytes_convert_like_the_reference() {
 
                 let decoded = common::decode_to_vec(entry.codec, &encoded).expect("our own");
                 assert_eq!(decoded, input, "{} length {taken}", entry.name);
-                judge(entry, &encoded);
+                check_decode(entry, &encoded);
             }
         }
     }
@@ -108,7 +108,7 @@ fn random_corruptions_are_judged_like_the_reference() {
                         rng.pick(&SOUP)
                     };
                 }
-                judge(entry, &corrupted);
+                check_decode(entry, &corrupted);
             }
         }
     }
@@ -127,7 +127,7 @@ fn random_character_soup_is_judged_like_the_reference() {
                 *slot = rng.pick(&SOUP);
             }
             for entry in &CODECS {
-                judge(entry, &encoded[..taken]);
+                check_decode(entry, &encoded[..taken]);
             }
         }
     }
@@ -150,7 +150,7 @@ fn random_splices_are_judged_like_the_reference() {
 
             let mut spliced = left[..rng.below(left.len() + 1)].to_vec();
             spliced.extend_from_slice(&right[..rng.below(right.len() + 1)]);
-            judge(entry, &spliced);
+            check_decode(entry, &spliced);
         }
     }
 }

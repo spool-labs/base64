@@ -1,7 +1,7 @@
 //! Where a decode says the trouble is, at every offset it could be
 //!
 //! A vector kernel converts whole blocks and hands anything suspect to the
-//! portable walk, so the offset a refusal names is put together from a block
+//! portable walk, so the offset a refusal reports is put together from a block
 //! count and a walk inside it. Here every offset of every length is corrupted
 //! in turn and the offset reported has to be exactly the one corrupted.
 
@@ -46,7 +46,7 @@ fn agrees_with_reference(entry: &common::Compared, encoded: &[u8]) {
     }
 }
 
-/// A character outside the alphabet is named at the offset it sits at,
+/// A character outside the alphabet is reported at the offset it sits at,
 /// wherever in the input that falls
 #[test]
 fn a_byte_outside_the_alphabet_is_named_at_its_own_offset() {
@@ -81,7 +81,7 @@ fn a_byte_outside_the_alphabet_is_named_at_its_own_offset() {
     }
 }
 
-/// A character outside the alphabet is named at its own offset in an input
+/// A character outside the alphabet is reported at its own offset in an input
 /// long enough that whole runs of blocks converted before it
 ///
 /// A run that finds a bad character hands the walk a checkpoint to restart

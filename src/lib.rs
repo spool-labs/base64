@@ -152,7 +152,7 @@ impl Codec {
         }
     }
 
-    /// The characters of `input` that carry bits, padding checked and removed
+    /// The characters of `input` that hold bits, padding checked and removed
     #[inline]
     fn payload<'input>(&self, input: &'input [u8]) -> Result<&'input [u8], DecodeError> {
         let len = input.len();
@@ -168,7 +168,7 @@ impl Codec {
         let one = usize::from(input[len - 1] == b'=');
         let two = one & usize::from(input[len - 2] == b'=');
         let three = two & usize::from(input[len - 3] == b'=');
-        // Two is the most padding an encoding carries.
+        // Two is the most padding an encoding has.
         if three != 0 {
             return Err(DecodeError::InvalidPadding { position: len - 3 });
         }
@@ -183,7 +183,7 @@ pub(crate) const fn decoded_len(len: usize) -> usize {
 
 /// Whether `len` characters are a count some encoding produces
 ///
-/// One character past a whole group carries 6 bits, short of a byte, and a
+/// One character past a whole group holds 6 bits, short of a byte, and a
 /// padded encoding is always a whole number of groups.
 pub(crate) const fn length_ok(len: usize, is_padded: bool) -> bool {
     if is_padded {

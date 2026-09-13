@@ -114,7 +114,7 @@ pub fn decode_to_vec(codec: Codec, encoded: &[u8]) -> Result<Vec<u8>, DecodeErro
     Ok(decoded)
 }
 
-/// Characters of an encoding that carry bits, padding left off
+/// Characters of an encoding that hold bits, padding left off
 pub fn payload_len(encoded: &[u8]) -> usize {
     let mut len = encoded.len();
     while len > 0 && encoded[len - 1] == b'=' {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn criterion's output into the tables BENCHMARKS.md carries.
+"""Turn criterion's output into the tables in BENCHMARKS.md.
 
 Reads a criterion run from a file or stdin and prints one table per
 direction, in GiB/s, with what this crate did against the best of the rest.
