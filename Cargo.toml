@@ -27,3 +27,7 @@ std = []
 # The `testing` module, which pins the path and the streaming floor for the
 # whole process. Off by default: it is the test suite's, not a caller's.
 internals = []
+
+# So the published docs show the `std::error::Error` impls.
+[package.metadata.docs.rs]
+features = ["std"]

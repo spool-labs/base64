@@ -1,10 +1,55 @@
 # tape-base64
 
-Fast base64. One kernel per architecture, written for the shape of that
-architecture's registers rather than ported from another's, and a portable
-walk everywhere else. `no_std`, no allocation, no dependencies.
+[![Crates.io](https://img.shields.io/crates/v/tape-base64.svg)](https://crates.io/crates/tape-base64)
+[![Documentation](https://docs.rs/tape-base64/badge.svg)](https://docs.rs/tape-base64)
+[![License](https://img.shields.io/crates/l/tape-base64.svg)](LICENSE)
 
-## API
+A fast base64 implementation for Rust. It's `no_std`, never allocates, and has
+no dependencies.
+
+## Why it's fast
+
+The fastest way to do base64 is different on each instruction set, so we wrote
+a separate kernel for each one instead of translating a single design across
+them. We did try porting: the AVX-512 decoder's lookup table, moved to NEON,
+came out 4 to 13% slower, because the instruction it leans on is one uop on x86
+and four on ARM.
+
+So each kernel is built around what its hardware is good at:
+
+- **ARM (NEON)** can load 48 bytes and split them into the first, second and
+  third byte of every group in one instruction (`ld3`), and store four
+  registers back interleaved (`st4`). That rearranging is the awkward part of
+  base64, and here the loads and stores do it. One table lookup covers the
+  whole alphabet.
+- **AVX2** has neither, and its shuffles only look up 16 entries at a time. So
+  it moves each 3-byte group into its own 32-bit lane, splits out the fields
+  with multiplies, and maps them to characters through a 16-entry offset table.
+  The multiplies are written in inline asm, because LLVM was quietly turning
+  them into shifts and blends and losing a third of the encode speed.
+- **AVX-512 VBMI** can look up all 64 characters at once (`vpermb`) and pull
+  every field out of a lane in one instruction (`vpmultishiftqb`), so that
+  kernel is short. Masked loads and stores handle the leftover bytes without
+  a separate tail loop.
+- **wasm simd128** looks like AVX2 with 16-byte registers, so it reuses that
+  approach. Everything else gets a portable version.
+
+On x86, the crate asks the processor which of these it supports the first time
+you call it. Very large encodes on AVX2 skip the cache, since writing that much
+output through it only evicts everything else. The cutoff is scaled from the
+cache size the processor reports, because a fixed number tuned on one machine
+is wrong on the next.
+
+On an Apple M4 that comes to 1.6 to 1.9x the next fastest crate. On x86 it's
+level with `base64-turbo`. [BENCHMARKS.md](BENCHMARKS.md) has the full
+numbers, the machines, and how to reproduce them.
+
+## Using it
+
+```toml
+[dependencies]
+tape-base64 = "0.1"
+```
 
 ```rust
 STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD   // the four RFC 4648 codecs
@@ -15,49 +60,29 @@ codec.encoded_len(usize) -> Option<usize>
 codec.decoded_len(&[u8]) -> Result<usize, DecodeError>
 codec.decoded_len_max(usize) -> usize
 
-encode, decode, encoded_len        // the same on the padded standard alphabet
-
 codec.encoder() -> Encoder         // push(&[u8], &mut [u8]), finish(&mut [u8])
 codec.decoder() -> Decoder         // push(&[u8], &mut [u8]), finish(&mut [u8])
 ```
 
-Every call writes into a buffer the caller owns and returns how much it wrote.
-The encoder and decoder take input a piece at a time and produce exactly what
-one call over the joined input would, refusals included: the same error at the
-same offset. What was converted before a refusal stays converted, and an encode
-push short of room refuses the whole piece rather than part of it.
+You give it the output buffer and it tells you how many bytes it wrote, so
+nothing allocates and the same code works in `no_std` and in a hot loop. If
+your input arrives in pieces, `encoder()` and `decoder()` handle the
+boundaries and produce exactly what one call on the whole input would, errors
+and error offsets included.
 
-## How it is fast
+Decoding is strict. Whitespace, bad padding and nonzero trailing bits are all
+errors, so each byte string has only one valid encoding per codec.
 
-A group is 3 bytes, which no register width divides, so each kernel is
-written for the shape of its own registers.
+Nothing is ever written past the length a call returns. CI runs the kernels
+under Miri and valgrind as well as the tests, because an out-of-bounds read
+usually still gives the right answer. Valgrind caught two that the tests
+missed.
 
-| | a block |
-|---|---|
-| aarch64 | `ld3` reads 48 bytes as the first, second and third byte of 16 groups, shifts split the fields, one `tbl` over all 64 characters spells them, `st4` writes them back interleaved |
-| x86-64 AVX2 | 3 bytes gathered into each 32-bit lane, fields split by a pair of multiplies, alphabet through a 16-entry offset table |
-| x86-64 AVX-512VBMI | `vpermb` indexes all 64 characters at once, `vpmultishiftqb` pulls every field out of a lane, masked loads and stores cover the last partial block |
-| wasm32 simd128 | the AVX2 form on one 16-byte register, lookups through `i8x16.swizzle` |
-| anything else | portable, two groups per wide load |
+## Credits
 
-Decoding runs the same way backwards, classifying each character by its two
-nibbles. Which x86 path runs is asked of the processor at first use. Every
-kernel reads and writes exactly what it converts, except where the x86 ones
-overlap a block a later block overwrites, so nothing lands past what a call
-returns.
-
-## Benchmarks
-
-[BENCHMARKS.md](BENCHMARKS.md) holds the numbers, the machines, and how to
-reproduce them.
-
-## Attribution
-
-The decoder's nibble classification is Wojciech Muła's, from his and Daniel
-Lemire's work on vectorised base64. The aarch64 block structure, `ld3` in,
-`st4` out and the alphabet through `tbl`, follows Alfred Klomp's
-`aklomp/base64`. The x86 field split is the same authors', in the variant that
-reaches its shifts through a low multiply. All of these are widely
-reimplemented; this is an independent implementation of the same ideas, with
-the block sizes, remainder handling, exact bounds and error handling worked out
-here.
+The decoder's character check, which looks at each character's high and low
+nibble, comes from Wojciech Muła and Daniel Lemire's work on vectorised base64.
+So does the multiply trick in the AVX2 encoder. The NEON structure follows
+Alfred Klomp's [aklomp/base64](https://github.com/aklomp/base64). We didn't
+copy code from either. The block sizes, tail handling, bounds and errors are
+our own.
