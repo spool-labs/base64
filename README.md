@@ -29,106 +29,22 @@ push short of room refuses the whole piece rather than part of it.
 
 ## How it is fast
 
-A group is 3 bytes, which no register width divides. On aarch64, `ld3` reads
-48 bytes as three registers holding the first, second and third byte of every
-group, four shifts and inserts split the six-bit fields, one `tbl` over all 64
-characters spells them, and `st4` writes them back interleaved. Decoding runs
-the other way through `ld4` and `st3`, classifying each character by its two
-nibbles. 48 bytes a block, and nothing shuffled into place.
+A group is 3 bytes, which no register width divides, so each kernel is
+written for the shape of its own registers.
 
-On x86, AVX2 gathers 3 bytes into each 32-bit lane and splits the fields with
-a pair of multiplies. AVX-512 with VBMI does it in three instructions: `vpermb`
-indexes all 64 characters at once and `vpmultishiftqb` pulls every six-bit
-field out of a lane, with masked loads and stores covering the last partial
-block. Which x86 path runs is asked of the processor at first use, not fixed
-when the crate is built.
-
-A block that would run past the end is moved back to end where the groups end,
-converting a few groups twice, so the portable walk is left only the one or two
-bytes short of a group. The aarch64 kernels touch exactly what they convert.
-The x86 encoder reads 4 bytes before a block only where both sides have the
-room, and the x86 decoder lands 24 bytes as two overlapping 16-byte stores only
-where the next block overwrites the overhang, so nothing is written past what a
-call returns. Above the size where input and output stop fitting in the last
-level cache, read from cpuid, the x86 encoder streams its stores past the cache.
-
-## Paths
-
-| Architecture | Path |
+| | a block |
 |---|---|
-| aarch64 | `ld3`/`st4` blocks of 48 bytes, alphabet through one four-register lookup |
-| x86-64 with AVX2 | 3 bytes gathered into each lane, fields split by a pair of multiplies |
-| x86-64 with AVX-512VBMI | `vpermb` for the alphabet, `vpmultishiftqb` for the fields, masked at both ends |
-| wasm32 with simd128 | 16 byte lookups through `i8x16.swizzle`, fields split by four masked shifts |
+| aarch64 | `ld3` reads 48 bytes as the first, second and third byte of 16 groups, shifts split the fields, one `tbl` over all 64 characters spells them, `st4` writes them back interleaved |
+| x86-64 AVX2 | 3 bytes gathered into each 32-bit lane, fields split by a pair of multiplies, alphabet through a 16-entry offset table |
+| x86-64 AVX-512VBMI | `vpermb` indexes all 64 characters at once, `vpmultishiftqb` pulls every field out of a lane, masked loads and stores cover the last partial block |
+| wasm32 simd128 | the AVX2 form on one 16-byte register, lookups through `i8x16.swizzle` |
 | anything else | portable, two groups per wide load |
 
-The wasm kernel runs when the crate is built with `-C target-feature=+simd128`.
-
-The AVX2 path has run on EPYC Milan and Xeon Skylake-SP, the AVX-512VBMI path
-on EPYC Turin under valgrind, and Skylake-SP, which has AVX-512 without VBMI,
-shows dispatch declining the wide path rather than faulting.
-
-## Verification
-
-Every kernel is held against the portable walk at every length, in both
-alphabets, and every refusal has to match character and offset. `tests/forced.rs`
-pins each path the running processor can execute in turn:
-
-```sh
-cargo test --features internals
-```
-
-The x86 kernels also run on Apple silicon under Miri, with the instructions the
-interpreter lacks modelled beside them and the target features in `RUSTFLAGS`
-standing in for cpuid, so what runs is the kernel itself:
-
-```sh
-RUSTFLAGS="-C target-feature=+avx512f,+avx512bw,+avx512vbmi" \
-  cargo +nightly miri test --target x86_64-unknown-linux-gnu \
-  --features internals --test forced
-```
-
-Over-reads are invisible to `cargo test`, so valgrind finds them:
-
-```sh
-cargo test --release --features internals --test forced --test lengths --no-run
-valgrind --error-exitcode=9 --quiet target/release/deps/forced-*
-valgrind --error-exitcode=9 --quiet target/release/deps/lengths-*
-```
-
-`forced` pins each x86 path in turn and is empty on aarch64, where `lengths`
-puts the NEON kernel through every length in exactly sized buffers.
-
-The aarch64 kernel cannot run under Miri, which has no `vqtbl4q_u8`.
-
-`fuzz/` holds three cargo-fuzz targets, `decode`, `roundtrip` and `streaming`,
-each against the reference crate:
-
-```sh
-cd fuzz && cargo +nightly fuzz run decode
-```
-
-CI runs the test suite on x86-64 and aarch64, Miri over the x86 kernels,
-valgrind on both architectures, and a minute of each fuzz target.
-
-## Features
-
-| feature | what it does |
-|---|---|
-| `std` | `std::error::Error` for the two error types. Off by default |
-| `internals` | the `testing` module that pins a path, for the test suite. Off by default |
-
-## Refusals
-
-Decoding is strict and says where it went wrong:
-
-* a byte outside the alphabet, with its offset
-* a character count no encoder produces
-* padding that is absent, too long, or not at the end
-* a final character with bits the output has no room for
-
-The vector stage never reports these. It stops before a bad block and the
-portable walk finds the offset, so an error costs only when there is one.
+Decoding runs the same way backwards, classifying each character by its two
+nibbles. Which x86 path runs is asked of the processor at first use. Every
+kernel reads and writes exactly what it converts, except where the x86 ones
+overlap a block a later block overwrites, so nothing lands past what a call
+returns.
 
 ## Benchmarks
 
